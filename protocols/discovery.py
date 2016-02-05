@@ -9,7 +9,8 @@ the implementation of UPnP/SSDP protocols, that can be verified on:
 """
 
 
-__author__ = 'douglasvinter@gmail.com'
+__author__ = 'douglasvinter'
+__version__ = '0.1'
 
 
 import re

@@ -21,12 +21,12 @@ TO-DO:
 
 
 __author__ = 'douglasvinter'
+__version__ = '0.1'
 
 
 import zmq
 import time
 import logging
-import threading
 from collections import namedtuple
 #from ..resource import iotApp
 BaseMQResponse = namedtuple('BaseMQResponse', ('status', 'data'))
@@ -146,13 +146,14 @@ class ClientMQ(object):
     """"""
     _mqs = {}
     _instance = None
-    context = zmq.Context(io_threads=3)
+    context = zmq.Context(io_threads=1)
 
     def __new__(cls):
         """"""
         if cls._instance is None:
             cls._instance = super(ClientMQ, cls).__new__(cls)
         return cls._instance
+
 
     def get_instance_for(self, user_auth, mq_uri, mq_type):
         """"""

@@ -4,7 +4,8 @@ Relaying only on pure Python socket API
 """
 
 
-__author__ = 'douglasvinter@gmail.com'
+__author__ = 'douglasvinter'
+__version__ = '0.1'
 
 
 import socket
