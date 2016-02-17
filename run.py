@@ -1,4 +1,10 @@
 """IoT Framework StartUp
+
+Note:
+    This will exist for development purposes only, in the future I plan 
+    to change this whole set of signals and shut-downs semaphore to the ContextManager.
+    Also verifying which OS type this framework is running for better underlying abstraction
+    i.e BSD/win32/linux
 """
 
 
@@ -7,7 +13,7 @@ __author__ = 'douglasvinter'
 import sys
 import signal
 import logging
-from core.manager import AppManager
+from core.manager import ContextManager
 
 
 # Logging for debbug
@@ -16,10 +22,10 @@ logging.basicConfig(level=logging.DEBUG,
                     datefmt='%m/%d %H:%M:%S')
 
 def signal_handler(signal=0, frame=0):
-    AppManager().get_instance().shutdown()
+    ContextManager().get_instance().shutdown()
 
 if __name__ == '__main__':
-    app = AppManager()
+    app = ContextManager()
     app.daemon = True
     app.start()
     if sys.platform.startswith('win'):

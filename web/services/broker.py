@@ -95,7 +95,7 @@ class ClientXREQFactory(ClientFactory):
             mq_type=zmq.XREQ, context=context, mq_uri=mq_uri)
         self.poll = zmq.Poller()
         self.lock = threading.Lock()
-        self.cond = threading.Condition(threading.Lock())
+        self.cond = threading.Condition(threading.RLock())
         self.poll.register(self.transport, zmq.POLLIN)
         self.connect()
 

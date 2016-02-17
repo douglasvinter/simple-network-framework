@@ -10,21 +10,16 @@ __author__ = 'douglasvinter'
 
 
 import os
-import gc
 import sys
-import time
-import signal
-import logging
+import utils
 import threading
 import importlib
 import multiprocessing
-from .util import PoolComponent
-from .util import ComponentEnum
-from .util import ProcessComponent
-from .util import COMPONENTS
+from logging import getLogger
+from .backend import BackendServerMQ
 
 
-class AppManager(threading.Thread):
+class ContextManager(threading.Thread, BackendServerMQ):
     """Components manager, semaphores and data sharing.
 
     This class is a singleton instance which provides data sharing
@@ -35,85 +30,85 @@ class AppManager(threading.Thread):
     """
 
     _instance = None
+    __isrunning = True
 
     def __new__(cls):
         """Avoids another core to be initialized."""
         if not cls._instance:
-            cls._instance = super(AppManager, cls).__new__(cls)
+            cls._instance = super(ContextManager, cls).__new__(cls)
         return cls._instance
 
     def __repr__(self):
-        return '<{} Singleton instance at {}>'.format(self.__class__.__name__,
-                                                      id(self))
+        return '<{} ContextManager instance at {}>'.format(self.__class__.__name__,
+            id(self))
 
     def __str__(self):
-        return 'appManager Class'
+        return '<{} ContextManager instance at {}>'.format(self.__class__.__name__,
+            id(self))
 
     def __init__(self):
+        """"""
+        self.config = utils.parse_config()
         self.components = {}
-        self.logging = logging.getLogger('AppManager')
-        self.manager_event = threading.Event()
-        self.manager_event.set()
+        self.logging = getLogger(self.config.core.get('logger_name'))
+        self.manager_event = lambda: self.__isrunning
         threading.Thread.__init__(self)
+        BackendServerMQ.__init__(self, **self.config.core.get('kwargs'))
+        self.logging.info('IoT Manager started at pid: {}'.format(os.getpid()))
+        self.logging.info('Starting components...')
+        self.start_framework()
 
     @staticmethod
     def get_instance():
         """Gets class instance."""
-        if not AppManager._instance:
-            AppManager._instance = AppManager()
-        return AppManager._instance
+        if not ContextManager._instance:
+            ContextManager._instance = ContextManager()
+        return ContextManager._instance
 
     def run(self):
         """Core management and engine-start."""
-        self.logging.info('IoT Manager started at pid: {}'.format(os.getpid()))
-        self.logging.info('Starting components...')
-        self.start_framework()
-        
-        while self.manager_event.isSet():
-            # Do Manager Stuff
-            # Force Garbage Collector to clean tracked garbage from this
-            # part of the python runtime (PVM)
-            gc.collect()
-            time.sleep(5)
+        while self.manager_event():
+            identity = msg = ''
+            try:
+                identity, msg = self.recv().next()
+            except StopIteration:
+                self.logging.info('No data on MQ:{}'.format(self.mq_uri))
+            if identity and msg:
+                self.logging.info('Received: {} from {}'.format(identity, msg))
+                self.send([identity, msg])
         self.shutdown()
-        sys.exit(1)
 
     def shutdown(self):
-        """ Shutdown application gracefully providing exit signal."""
-        for component in self.components.keys():
-            if component.name == ComponentEnum.WORKER_POOL:
-                # stop threading event
-                component.main_event_loop.clear()
-            elif component.name == ComponentEnum.SOCKET_POOL:
-                component.shutdown_streams()
-                component.main_event_loop.clear()
-            elif comp_type == ComponentEnum.STANDALONE_PROCESS:
-                os.killpg(os.getpgid(pro.pid), signal.SIGTERM)
+        """Stop components"""
+        for component in self.config.components.keys():
+            if self.config.components[component].type == util.ComponentEnum.STANDALONE_PROCESS:
+                self.stop_process(component)
+        self.logging.info('All done, bye')
 
     def start_framework(self):
         """Start all registered / non - started workers.
 
         Check core.util.COMPONENTS to add new components.
         """
-        for components in COMPONENTS.keys():
-            comp_type = COMPONENTS[components]['enum']
-            if comp_type == ComponentEnum.STANDALONE_PROCESS:
-                self.start_process(components)
-            elif comp_type == ComponentEnum.WORKER_POOL:
-                pass
-            elif comp_type == ComponentEnum.SOCKET_POOL:
-                pass
-            elif comp_type == ComponentEnum.THREAD_POOL:
-                pass
+        try:
+            self.listen()
+        except zmq.ZMQError as e:
+            self.logging.warning('Error registering channel{}:\n{}' \
+                .format(self.mq_uri, e))
+
+        for component in self.config.components.keys():
+            if component != 'core':
+                if component[component].type == util.ComponentEnum.STANDALONE_PROCESS:
+                    self.start_process(component)
 
     def start_process(self, component_name):
         """Starts a child process component and update component mapping object."""
-        name = COMPONENTS[component_name]['name']
-        method = COMPONENTS[component_name]['start']
-        kwargs = COMPONENTS[component_name]['kwargs']
-        importPath = COMPONENTS[component_name]['importPath']
+        method = self.config.component[component]['start']
+        kwargs = self.config.component[component]['kwargs']
+        path = self.config.component[component]['path']
+
         try:
-            imp = importlib.import_module(importPath)
+            imp = importlib.import_module(path)
             proc = multiprocessing.Process(target=getattr(imp, method),
                                            kwargs=kwargs)
             proc.start()
@@ -122,10 +117,19 @@ class AppManager(threading.Thread):
             self.logging.critical(err)
         else:
             self.logging.info('{} started with pid: {} (child)'.format(name, proc.pid))
-            self.components[component_name] = ProcessComponent(pid=proc.pid, process=proc)
+            self.components[component_name] = utils.ProcessComponent(pid=proc.pid, process=proc)
 
     def stop_process(self, process_name):
-        raise NotImplementedError
+        """"""
+        if process_name in self.components.keys() and \
+            isinstance(self.components[process_name], utils.ProcessComponent):
+            if self.components[process_name].process.is_alive():
+                self.components[process_name].process.join()
+                self.logging.info('Component {} pid {} stopped'.format(process_name
+                self.components[process_name].pid))
+                del self.components[process_name]
+        else:
+            self.logging.info('Unknown process {}'.format(process_name))
 
     def stop_worker(self, worker_name):
         raise NotImplementedError
