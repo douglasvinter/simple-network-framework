@@ -27,6 +27,7 @@ __version__ = '0.1'
 import zmq
 import time
 import logging
+import threading
 from collections import namedtuple
 #from ..resource import iotApp
 BaseMQResponse = namedtuple('BaseMQResponse', ('status', 'data'))
@@ -34,6 +35,8 @@ BaseMQResponse = namedtuple('BaseMQResponse', ('status', 'data'))
 
 class ClientFactory(object):
     """"""
+    # Poll timeout in msec
+    POLL_TIMEOUT = 5
 
     def __init__(self, user_auth, mq_type, context, mq_uri):
         """"""
@@ -41,7 +44,11 @@ class ClientFactory(object):
         self.mq_type = mq_type
         self.transport = context.socket(mq_type)
         self.mq_uri = mq_uri
-        self.timeout = 1
+        self.timeout = 5
+        self.poll = zmq.Poller()
+        self.poll.register(self.transport)
+        self.lock = threading.Lock()
+        self.cond = threading.Condition(threading.RLock())
 
     def acquire(self):
         """"""
@@ -83,25 +90,20 @@ class ClientFactory(object):
         raise NotImplementedError
 
 
-class ClientXREQFactory(ClientFactory):
+class ClientSUBFactory(ClientFactory):
     """"""
-    # Poll timeout in msec
-    POLL_TIMEOUT = 1000
-    MQ_TYPE = 'XREQ'
+    
+    MQ_TYPE = 'sub'
 
     def __init__(self, user_auth, mq_uri, context):
         """"""
         ClientFactory.__init__(self, user_auth=user_auth, \
-            mq_type=zmq.XREQ, context=context, mq_uri=mq_uri)
-        self.poll = zmq.Poller()
-        self.lock = threading.Lock()
-        self.cond = threading.Condition(threading.RLock())
-        self.poll.register(self.transport, zmq.POLLIN)
+            mq_type=zmq.SUB, context=context, mq_uri=mq_uri)
         self.connect()
 
     def __exit__(self):
         """"""
-        self.transport.close()
+        self.transport.close(linger=True)
 
     @property
     def identity(self):
@@ -139,31 +141,88 @@ class ClientXREQFactory(ClientFactory):
 
     def close(self):
         """"""
-        self.transport.close()
+        self.transport.close(linger=True)
+
+
+class ClientXREQFactory(ClientFactory):
+    """"""
+
+    MQ_TYPE = 'xreq'
+
+    def __init__(self, user_auth, mq_uri, context):
+        """"""
+        ClientFactory.__init__(self, user_auth=user_auth, \
+            mq_type=zmq.XREQ, context=context, mq_uri=mq_uri)
+        self.connect()
+
+    def __exit__(self):
+        """"""
+        self.transport.close(linger=True)
+
+    @property
+    def identity(self):
+        """"""
+        return u'IoT-FE-{}'.format(self._user_auth).encode('ascii')
+
+    def send(self, json_data):
+        """"""
+        status = msg = ''
+        if self.acquire():
+            self.transport.send_json(json_data)
+            self.release()
+            status, msg = 200, 'OK'
+        else:
+            # 412 - Precondition Failed
+            status, msg = 412, 'Resource busy, try later'
+        
+        return BaseMQResponse(status=status, data=msg)
+
+    def recv(self):
+        """"""
+        status = msg = ''
+        if self.acquire():
+            sockets = dict(self.poll.poll(self.POLL_TIMEOUT))
+            if self.transport in sockets:
+                status, msg = 200, self.transport.recv_json()
+            else:
+                # 202 - Accepted, but not done yet
+                status, msg = 202, 'Request accepted but, processing has not been completed'
+            self.release()
+        else:
+            # 412 - Precondition Failed
+            status, msg = 412, 'Resource busy, try later'
+        return BaseMQResponse(status=status, data=msg)
+
+    def close(self):
+        """"""
+        self.transport.close(linger=True)
 
 
 class ClientMQ(object):
     """"""
+
     _mqs = {}
     _instance = None
     context = zmq.Context(io_threads=1)
 
     def __new__(cls):
         """"""
+
         if cls._instance is None:
             cls._instance = super(ClientMQ, cls).__new__(cls)
         return cls._instance
 
 
-    def get_instance_for(self, user_auth, mq_uri, mq_type):
+    def get_instance_for(self, user_auth, mq_uri = '', mq_type =''):
         """"""
+
         if user_auth not in self._mqs.keys():
             self._mqs[user_auth] = []
         for c in self._mqs[user_auth]:
             if c.mq_uri == mq_uri:
                 return c
         for instance in ClientFactory.__subclasses__():
-            if instance.MQ_TYPE == mq_type:
+            if instance.MQ_TYPE == mq_type or instance.mq_uri == mq_uri:
                 klss = instance(user_auth=user_auth,
                     mq_uri=mq_uri, context=self.context)
                 self._mqs[user_auth].append(klss)

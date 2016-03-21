@@ -10,13 +10,15 @@ __author__ = 'douglasvinter'
 
 
 import os
-import sys
+import zmq
 import utils
 import threading
 import importlib
 import multiprocessing
 from logging import getLogger
 from .backend import BackendServerMQ
+from protocols.discovery import SSDP
+from protocols.discovery import SSDPException 
 
 
 class ContextManager(threading.Thread, BackendServerMQ):
@@ -39,24 +41,25 @@ class ContextManager(threading.Thread, BackendServerMQ):
         return cls._instance
 
     def __repr__(self):
-        return '<{} ContextManager instance at {}>'.format(self.__class__.__name__,
+        return '<{} instance at {}>'.format(self.__class__.__name__,
             id(self))
 
     def __str__(self):
-        return '<{} ContextManager instance at {}>'.format(self.__class__.__name__,
+        return '<{} instance at {}>'.format(self.__class__.__name__,
             id(self))
 
     def __init__(self):
         """"""
-        self.config = utils.parse_config()
-        self.components = {}
-        self.logging = getLogger(self.config.core.get('logger_name'))
-        self.manager_event = lambda: self.__isrunning
-        threading.Thread.__init__(self)
-        BackendServerMQ.__init__(self, **self.config.core.get('kwargs'))
+        utils.parse_config()
+        self.logging = getLogger(ContextManager.__class__.__name__)
+        self.manager_loop = lambda: self.__isrunning
+        utils.Cache(components={})
+        utils.Cache(storage={})
+        BackendServerMQ.__init__(self, **utils.Cache().get('config.core.backend.kwargs'))
         self.logging.info('IoT Manager started at pid: {}'.format(os.getpid()))
         self.logging.info('Starting components...')
         self.start_framework()
+        threading.Thread.__init__(self)
 
     @staticmethod
     def get_instance():
@@ -67,21 +70,16 @@ class ContextManager(threading.Thread, BackendServerMQ):
 
     def run(self):
         """Core management and engine-start."""
-        while self.manager_event():
-            identity = msg = ''
-            try:
-                identity, msg = self.recv().next()
-            except StopIteration:
-                self.logging.info('No data on MQ:{}'.format(self.mq_uri))
-            if identity and msg:
-                self.logging.info('Received: {} from {}'.format(identity, msg))
-                self.send([identity, msg])
+        while self.manager_loop():
+            for identity, msg in self.recv():
+                self.logging.info('Received: {} from {}'.format(msg, identity))
+                self.send(identity, msg)
         self.shutdown()
 
     def shutdown(self):
         """Stop components"""
-        for component in self.config.components.keys():
-            if self.config.components[component].type == util.ComponentEnum.STANDALONE_PROCESS:
+        for component in utils.Cache().get('components').keys():
+            if utils.Cache().get([component, 'type']) == utils.Constants.PROCESS:
                 self.stop_process(component)
         self.logging.info('All done, bye')
 
@@ -93,19 +91,20 @@ class ContextManager(threading.Thread, BackendServerMQ):
         try:
             self.listen()
         except zmq.ZMQError as e:
-            self.logging.warning('Error registering channel{}:\n{}' \
+            self.logging.warning('Error registering channel: {} - {}' \
                 .format(self.mq_uri, e))
 
-        for component in self.config.components.keys():
-            if component != 'core':
-                if component[component].type == util.ComponentEnum.STANDALONE_PROCESS:
-                    self.start_process(component)
+        for component in utils.Cache().get('config.components').keys():
+            if utils.Cache().get(['config', 'components', component, 'type']) \
+            == utils.Constants.PROCESS:
+                self.start_process(component)
 
     def start_process(self, component_name):
         """Starts a child process component and update component mapping object."""
-        method = self.config.component[component]['start']
-        kwargs = self.config.component[component]['kwargs']
-        path = self.config.component[component]['path']
+        comp = utils.Cache().get(['config', 'components', component_name])
+        method = comp.get('start')
+        kwargs = comp.get('kwargs')
+        path = comp.get('path')
 
         try:
             imp = importlib.import_module(path)
@@ -113,26 +112,20 @@ class ContextManager(threading.Thread, BackendServerMQ):
                                            kwargs=kwargs)
             proc.start()
         except (ImportError, multiprocessing.ProcessError) as err:
-            self.logging.critical('Error starting {}'.format(name))
-            self.logging.critical(err)
+            self.logging.critical('Error starting {}: {}'.format(component_name, err))
         else:
-            self.logging.info('{} started with pid: {} (child)'.format(name, proc.pid))
-            self.components[component_name] = utils.ProcessComponent(pid=proc.pid, process=proc)
+            self.logging.info('{} started with pid: {} (child)'.format(component_name, proc.pid))
+            self.components[component_name] = utils.Cache().set(['components', component_name], \
+                                                                {'pid': proc.pid, 'process': proc, 'type': utils.Constants.PROCESS})
 
     def stop_process(self, process_name):
         """"""
-        if process_name in self.components.keys() and \
-            isinstance(self.components[process_name], utils.ProcessComponent):
-            if self.components[process_name].process.is_alive():
-                self.components[process_name].process.join()
-                self.logging.info('Component {} pid {} stopped'.format(process_name
-                self.components[process_name].pid))
-                del self.components[process_name]
+
+        proc = utils.Cache().get(['components', process_name])
+        if proc:
+            if proc['process'].is_alive():
+                proc['process'].join()
+                self.logging.info('Component {} stopped'.format(process_name))
+                utils.Cache().delete(['components', process_name])
         else:
             self.logging.info('Unknown process {}'.format(process_name))
-
-    def stop_worker(self, worker_name):
-        raise NotImplementedError
-
-    def stop_pool(self, worker_name):
-        raise NotImplementedError

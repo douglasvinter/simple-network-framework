@@ -10,43 +10,77 @@ managed by the core on start() signal.
 __author__ = 'douglasvinter'
 
 
-import json
 import yaml
-import collections
+import pdb
+from collections import MutableMapping
 
 
-class ComponentEnum(object):
-    """Enum class to map managed components"""
-    STANDALONE_PROCESS = 0x01
+class Constants(object):
+    THREAD = 'THREAD'
+    PROCESS = 'PROCESS'
+    THREAD_POOL = 'THREAD_POOL'
+    PROCESS_POOL = 'PROCESS_POOL'
+ 
+ 
+class Cache(MutableMapping):
+    """Super set"""
 
-class PoolComponent(collections.namedtuple('poolComponent', ('main_event_loop'), verbose=False)):
-    """Skeleton Class to add new worker pool components to manager"""
-    workers = []
+    _instance = None
 
-# processComponent - Skeleton Class to add parallel components working
-# i.e Web RESTful API
-ProcessComponent = collections.namedtuple('ProcessComponent', ('pid', 'process'), verbose=False)
-
-def parse_config():
-    cfg = None
-    with open('config.yml') as f:
-        cfg = yaml.safe_load(f)
-    return ConfigAttributes(cfg)
-
-class ConfigAttributes(dict):
-    """"""
+    def __new__(cls, *args, **kwargs):
+        """Singleton cache"""
+        if not cls._instance:
+            cls._instance = super(Cache, cls).__new__(cls, *args, **kwargs)
+        else:
+            super(Cache, cls).__init__(cls, *args, **kwargs)
+        return cls._instance
 
     def __init__(self, *args, **kwargs):
-        """"""
-        super(ConfigAttributes, self).__init__(*args, **kwargs)
-        self.__dict__ = self
+        self.__dict__.update(*args, **kwargs)
 
-    def __repr__(self):
-        """"""
-        return '<{} IoT Configuration at {}>'.format(self.__class__.__name__,
-                                                      id(self))
+    def __setitem__(self, key, value):
+        self.__dict__[key] = value
+
+    def get(self, key):
+        if '.' in key:
+            key = key.split('.')
+        elif '.' not in key and isinstance(key, (str, unicode)):
+            key = [key]
+        return self.__getitem__(key)
+
+    def set(self, key, value):
+        if '.' in key:
+            key = key.split('.')
+        elif '.' not in key and isinstance(key, (str, unicode)):
+            key = [key]
+        self.__getitem__(key[:-1])[key[-1]] = value
+
+    def delete(self, key):
+        if '.' in key:
+            key = key.split('.')
+        elif '.' not in key and isinstance(key, (str, unicode)):
+            key = [key]
+        del self.__getitem__(key[:-1])[key[-1]]
+
+    def __getitem__(self, key):
+        return reduce(lambda d, k: d[k], key, self.__dict__)
+            
+    def __delitem__(self, key):
+        return
+
+    def __iter__(self):
+        return iter(self.__dict__)
+
+    def __len__(self):
+        return len(self.__dict__)
 
     def __str__(self):
-        """"""
-        return '<{} IoT Configuration at {}>'.format(self.__class__.__name__,
-                                                      id(self))
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return '{}, Cache({})'.format(super(Cache, self).__repr__(), 
+                                  self.__dict__)
+
+def parse_config():
+    with open('config.yml') as f:
+        return Cache(config=yaml.safe_load(f))

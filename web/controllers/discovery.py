@@ -5,23 +5,15 @@
 __author__ = 'douglasvinter'
 
 
-from flask import jsonify
-from ..resource import iotApp
-from ..resource import iotApi
-from flask import make_response
+from web import iotweb
 from flask_restful import Resource
 
-
-@iotApi.route('network/discovery/<string:protocol>')
-class DiscoveryAPI(Resource):
+@iotweb.router(('network/discovery', 'network/discovery/<string:serviceName>'), strict_slashes=False, methods=['GET', 'POST'])
+class NetworkDiscovery(Resource):
     """Simple GET to return all devices on a local network"""
-
-    def get(self, protocol):
-        return make_response(jsonify({protocol: protocol}), 200)
-
-@iotApi.route('network/discovery/debug')
-class DebugAPI(Resource):
-    """Debug to test the REST API while developing a new network protocol"""
+            
+    def get(self, serviceName=None):
+        return {'status': 'ok'}, 200
     
-    def get (self):
-        return make_response(jsonify({protocol: protocol}), 200)
+    def post(self):
+        return {'status': 'ok'}, 200

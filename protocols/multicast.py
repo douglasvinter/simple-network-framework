@@ -189,10 +189,35 @@ class Multicast(object):
         except AttributeError:
             self.logging.warning('Re-use address is not supported')
 
+    def get_host_address(self):
+        """Gets your own IP Address
+        
+        Note:
+            This method is a fallback in case your distro /etc/hosts
+            is not configured properly or if you have any network problems.
+        """
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except socket.error:
+            self.logging.warning('your /etc/hosts does not resolve your address, trying to resolve over DNS query')
+        try:
+            dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # NOTE depending on your network setup this may look like 
+            # a sort of DNS cache poisoning, but its just a simple resolve.
+            dns.connect(('8.8.8.8', 53))
+            host = dns.getsockname()
+            dns.shutdown(socket.SHUT_RDWR)
+        except (socket.error, AttributeError):
+            pass
+        if isinstance(host, (list, tuple)):
+            return host[0]
+        else:
+            raise JoinGroupError('Network is not properly configured on this system')
+                
     def join_group(self):
         """Joins multicast group"""
         try:
-            host = socket.gethostbyname(socket.gethostname())
+            host = self.get_host_address()
             self.transport.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, \
                 socket.inet_aton(host))
             self.transport.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, \
@@ -234,8 +259,6 @@ class Multicast(object):
         try:
             data, (host, port) = self.transport.recvfrom(self.recv_size)
         except socket.timeout as mcast_time_out:
-            self.logging.debug('Timeout while waiting for answer: {}' \
-                .format(mcast_time_out))
             data = '{}'.format(mcast_time_out)
         except (socket.error, AttributeError) as mcast_error:
             # We won't close the socket file descriptor

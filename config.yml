@@ -2,14 +2,14 @@ core:
    logger_name: IoT Manager
    backend:
      kwargs:
-      {mq_uri: 'inproc://iot/channels/rest',
-logger_name: MQ IoT Channel, timeout: 2000, debug: False}
+      {mq_uri: {xreq: 'tcp://127.0.0.1:5101', sub: 'tcp://127.0.0.1:5102'},
+logger_name: MQ IoT Channel, timeout: 1000}
 
 components:
    api:
-    type: STANDALONE_PROCESS
+    type: PROCESS
     path: web.webrun
     start: start_app
     kwargs:
-     {logger_name: IoT REST API, host: '0.0.0.0',
- port: 8101, mq_uri: core.mq_uri, debug: False}
+     {logger_name: 'IoT REST API', host: '127.0.0.1',
+ port: 8105, mq_uri: {xreq: 'tcp://127.0.0.1:5101', sub: 'tcp://127.0.0.1:5102'}, debug: False}

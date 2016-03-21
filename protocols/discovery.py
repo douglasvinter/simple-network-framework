@@ -178,8 +178,9 @@ class SSDP(Multicast):
             JoinGroupError - Socket level errors for multicast will be raised on the instantiation
             SSDPException - Wrong parameters will result on a exception
         """
-        self.upnp_version = upnp_version
+        self.upnp_version = float(upnp_version)
         self.search_target = search_target
+        upnp_max_wait = int(upnp_max_wait)
         if upnp_max_wait <= 0:
             self.upnp_max_wait = 120 if upnp_version == 1.0 else 3
         else:
