@@ -7,7 +7,7 @@ __version__ = '0.1'
 
 import zmq
 from logging import getLogger
-from collections import MutableMapping
+
 
 class Channels(object): pass
 
@@ -51,16 +51,4 @@ class BackendServerMQ(object):
     def __exit__(self):
         """"""
         self.shutdown_streams()
-
-
-class Cache(MutableMapping):
-    """
-    """
-    
-    
-    def __getitem__(self): pass
-    def __setitem__(self): pass
-    def __delitem__(self): pass
-    def __iter__(self): pass
-    def __len__(self): pass
         
