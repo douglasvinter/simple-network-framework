@@ -5,6 +5,6 @@
 __author__ = 'douglasvinter'
 
 
-from .broker import ClientMQ
+from web.broker import ClientMQ
 
 class DiscoveryService(object): pass

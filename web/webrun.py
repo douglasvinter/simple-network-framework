@@ -5,7 +5,6 @@
 __author__ = 'douglasvinter'
 
 from web import iotweb
-
 from controllers import *
 
 def start_app(**kwargs):

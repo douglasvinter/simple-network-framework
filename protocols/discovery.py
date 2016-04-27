@@ -202,6 +202,13 @@ class SSDP(Multicast):
         # while joining on a group, but we won't catch it as you may want to do your own fall-back
         self.join_group()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        if self.is_connected:
+            self.destroy()
+
     def __del__(self):
         """Closes socket, if implementer forgets it open
 

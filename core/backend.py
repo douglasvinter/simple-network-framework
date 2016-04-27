@@ -41,6 +41,13 @@ class BackendServerMQ(object):
         self.poll.register(self.channels.backend)
         self.logging.debug('Listen at: {}'.format(self.mq_uri))
 
+    def add_channel(self, channel_name, mq_uri, mq_type):
+        """"""
+        setattr(self.channels, channel_name, self.context.socket(mq_type))
+        self.channels.backend.bind(mq_uri)
+        self.poll.register(self.channels.__dict__.get(channel_name))
+        self.logging.debug('New channel at: {}'.format(mq_uri))
+
     def shutdown_streams(self):
         """"""
         self.__running = False

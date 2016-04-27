@@ -5,10 +5,11 @@
 __author__ = 'douglasvinter'
 
 
-from web import iotweb
+from web import iotweb, auth
 from flask_restful import Resource
 
-@iotweb.router(('network/discovery', 'network/discovery/<string:serviceName>'), strict_slashes=False, methods=['GET', 'POST'])
+@iotweb.router(('network/discovery', 'network/discovery/<string:serviceName>'), methods=['GET', 'POST'])
+@auth.login_required
 class NetworkDiscovery(Resource):
     """Simple GET to return all devices on a local network"""
             

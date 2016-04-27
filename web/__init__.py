@@ -1,7 +1,8 @@
 from types import MethodType
-from flask import Flask
+from flask import Flask, g
 from flask_restful import Api
 from flask_sqlalchemy import SQLAlchemy
+from flask_httpauth import HTTPBasicAuth
 
 
 class IotApp(Flask):
@@ -29,6 +30,7 @@ class IotApp(Flask):
                        static_url_path=None, static_folder=None,
                        template_folder=None, instance_path=None,
                        instance_relative_config=False)
+        self.g = g
         self._BASE_API_URI = api_uri
         self.config.from_object(cfg_from_object)
         self.db = SQLAlchemy(self)
@@ -43,8 +45,11 @@ class IotApp(Flask):
                 urls = map(uri, uris)
             else:
                 urls = [IotApp._BASE_API_URI+uris]
+            # strict_slashes Always false, avoid URL flooding
+            options.update({'strict_slashes': False})
             api.add_resource(resource, *urls, **options)
         return decorate
 
 
+auth = HTTPBasicAuth()
 iotweb = IotApp()

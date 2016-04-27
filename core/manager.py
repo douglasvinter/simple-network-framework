@@ -17,8 +17,6 @@ import importlib
 import multiprocessing
 from logging import getLogger
 from .backend import BackendServerMQ
-from protocols.discovery import SSDP
-from protocols.discovery import SSDPException 
 
 
 class ContextManager(threading.Thread, BackendServerMQ):
