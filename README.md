@@ -1,53 +1,55 @@
-# Simple IoT Framework
+# Simple Network Framework
 
-Open Source project that provides a simple and lightweight python framework for Internet of Things.
+Open Source project for network discovery protocols.
 
-This project will need a Embedded Linux hardware with 1-n cores and at least 256MB RAM for deploy.
+- Why not twisted, Tornado and etc?
+    * This framework purpose is to be lightweight and use the minimum external dependencies as possible
 
-Open Source framework that provides:
-- RF sensor management (TODO) - Could not purchase any sensors..
-- Bluetooth devices management/interface - Could not purchase bluetooth device..
-- Network devices discovery (SSDP & bluetooth - On going) - For now SSDP only
-- Messaging & Streaming (0MQ Based) - Still planning if worth it.
-- IP Camera interface (TODO)
-- REST API for remote management (TODO) 
-- *App UI for HDMI  (atom/electron + AngularJS) - (TODO)
-
-*Thinking on providing backend functionalities only, and develop a ionic app to manage/integrate with the REST API.
-
-Aimed python runtime: PyPy 2.7.x /cPython 2.7.x
-
-If you want to join this project or just give some feedbacks, be welcome to get in touch!
-
-# MQ Integration
-
-Not done yet.
+Protocols planned for implementation:
+    - UPnP / SSDP - Done
+    - mDNS - TODO
+    - SLP - TODO
 
 #SSDP Discovery
 
 
-Network discovery with SSDP standalone (without the framework)
+Network discovery with SSDPDaemon running
 
-	(iot)adminuser@linux:~/github_projects/iot/simple-iot-framework> python
-	Python 2.7.8 (default, Sep 30 2014, 15:34:38) [GCC] on linux2
-	Type "help", "copyright", "credits" or "license" for more information.
-	>>> from protocols.discovery import SSDP
-	>>> d = SSDP(search_target='ssdp:all', upnp_version=1.1, upnp_max_wait=5)
-	>>> for device in d.m_search():
-	>>>     print device
-	[02/01 18:41:19] SSDP Client     DEBUG   : Sending data for target 239.255.255.250:1900:
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	[02/01 18:41:19] SSDP Client     DEBUG   : {'cache-control': 'max-age=1800',
-	 'location': 'http://192.168.1.202:2869/upnphost/udhisapi.dll?content=uuid:30c0fe1b-528d-4870-a0c0-73dbc2c14a10',
-	 'server': 'Microsoft-Windows-NT/5.1 UPnP/1.0 UPnP-Device-Host/1.0',
-	 'st': 'urn:dmc-samsung-com:device:SyncServer:1',
-	 'usn': ' uuid:30c0fe1b-528d-4870-a0c0-73dbc2c14a10::urn:dmc-samsung-com:device:SyncServer:1',
-	 'uuid': '30c0fe1b-528d-4870-a0c0-73dbc2c14a10'}
-	[02/01 18:41:23] SSDP Client     DEBUG   : Timeout while waiting for answer: timed out {}
-	[02/01 18:41:23] SSDP Client     DEBUG   : Search done
-	>>>
+    Douglass-MacBook-Pro:simple-iot-framework dbranco$ python
+    Python 2.7.10 (default, Jul 30 2016, 18:31:42)
+    [GCC 4.2.1 Compatible Apple LLVM 8.0.0 (clang-800.0.34)] on darwin
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> from protocols.discovery import SSDPDaemon
+    >>> endpoint = SSDPDaemon()
+    >>> endpoint.start()
+    [11/30 19:57:11] SSDP Daemon     INFO    : UPnP server and client is running
+    >>> endpoint.add_m_search('ssdp:all')
+    True
+    >>>
+    [11/30 19:57:51] SSDP Daemon     DEBUG   : Received:
+    {'host': '239.255.255.250:1900', 'sender': ['10.35.96.140', 62811], 'st': 'urn:dial-multiscreen-org:service:dial:1', 'man': '"ssdp:discover"', 'mx': '1', 'user-agent': 'Google Chrome/54.0.2840.98 Mac OS X'}
+    >>> [11/30 19:57:52] SSDP Daemon     DEBUG   : Received:
+    {'host': '239.255.255.250:1900', 'sender': ['10.35.96.140', 62811], 'st': 'urn:dial-multiscreen-org:service:dial:1', 'man': '"ssdp:discover"', 'mx': '1', 'user-agent': 'Google Chrome/54.0.2840.98 Mac OS X'}
+    [11/30 19:57:53] SSDP Daemon     DEBUG   : Received:
+    {'host': '239.255.255.250:1900', 'sender': ['10.35.96.140', 62811], 'st': 'urn:dial-multiscreen-org:service:dial:1', 'man': '"ssdp:discover"', 'mx': '1', 'user-agent': 'Google Chrome/54.0.2840.98 Mac OS X'}
+    [11/30 19:57:54] SSDP Daemon     DEBUG   : Received:
+    {'host': '239.255.255.250:1900', 'sender': ['10.35.96.140', 62811], 'st': 'urn:dial-multiscreen-org:service:dial:1', 'man': '"ssdp:discover"', 'mx': '1', 'user-agent': 'Google Chrome/54.0.2840.98 Mac OS X'}
+    [11/30 19:58:52] SSDP Daemon     DEBUG   : Sending data for target 239.255.255.250:1900:
+    M-SEARCH * HTTP/1.1
+    HOST: 239.255.255.250:1900
+    MAN: "ssdp:discover"
+    ST: ssdp:all
+    MX: 5
+    USER-AGENT: Simple IoT Framework / 0.1
+
+
+    [11/30 19:58:52] SSDP Daemon     DEBUG   : Received:
+    {'host': '239.255.255.250:1900', 'sender': ['10.35.96.140', 1900], 'st': 'ssdp:all', 'man': '"ssdp:discover"', 'mx': '5', 'user-agent': 'Simple Network Framework / 0.1'}
+    >>>
+    >>> endpoint.join()
+    [11/30 19:59:11] SSDP Daemon     INFO    : SSDP Daemon stopped
+    [11/30 19:59:11] SSDP Daemon     DEBUG   : Closing RDWR for socket
+    [11/30 19:59:11] SSDP Daemon     DEBUG   : Closing RDWR for socket
+    >>>
+
 	
