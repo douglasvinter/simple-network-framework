@@ -5,10 +5,10 @@ Open Source project for network discovery protocols.
 - Why not twisted, Tornado and etc?
     * This framework purpose is to be lightweight and use the minimum external dependencies as possible
 
-Protocols planned for implementation:
-    - UPnP / SSDP - Done
-    - mDNS - TODO
-    - SLP - TODO
+- Protocols planned for implementation:
+    * UPnP / SSDP - Done
+    * mDNS - TODO
+    * SLP - TODO
 
 #SSDP Discovery
 
