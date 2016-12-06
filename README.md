@@ -40,7 +40,7 @@ Network discovery with SSDPDaemon running
     MAN: "ssdp:discover"
     ST: ssdp:all
     MX: 5
-    USER-AGENT: Simple IoT Framework / 0.1
+    USER-AGENT: Simple Network Framework / 0.1
 
 
     [11/30 19:58:52] SSDP Daemon     DEBUG   : Received:
