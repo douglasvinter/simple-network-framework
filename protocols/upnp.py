@@ -19,7 +19,7 @@ MULTICAST_TTL = 4
 M_SEARCH = ['M-SEARCH * HTTP/1.1', 'HOST: 239.255.255.250:1900',
             'MAN: "ssdp:discover"', 'ST: {st}', 'MX: {mx}', 'USER-AGENT: {ua}', '', '']
 ANSWER_TARGET = ['HTTP/1.1 200 OK', 'CACHE-CONTROL: max-age=1800', 'EXT:',
-                 'LOCATION: http://{my_addr}', 'SERVER: {system_name}',
+                 'LOCATION: http://{my_addr}', 'SERVER: {sys_name}',
                  'ST: {search_target}', 'USN: {server_usn}', '', '']
 
 

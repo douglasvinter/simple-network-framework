@@ -173,9 +173,9 @@ class DatagramSocket(object):
         Note:
             You're still free to call another methods if needed
         """
-        if self.__socket_type == DatagramSocket.UNICAST:
+        if self.__socket_type == DatagramSocket.CLIENT:
             self.build_protocol()
-        elif self.__socket_type == DatagramSocket.MULTICAST:
+        elif self.__socket_type == DatagramSocket.SERVER:
             self.build_protocol()
             self.join_group()
             self.listen()
@@ -237,18 +237,18 @@ class DatagramSocket(object):
         """
         if not isinstance(self.transport, socket.socket):
             raise MulticastException("Cant send, not connected")
-
-        self.logging.debug('Sending data for target {}:{}:\n{}'
-                           .format(self.group, self.port, msg))
-        try:
-            self.transport.sendto(msg, (self.group, self.port))
-        except (socket.error, AttributeError) as mcast_error:
-            error_msg = 'Error while sending multicast, reason:{}' \
-                .format(mcast_error)
-            self.logging.error(error_msg)
-            # Force file descriptor closure
-            self.destroy()
-            raise MulticastException(error_msg)
+        if len(msg) > 0:
+            self.logging.debug('Sending data for target {}:{}:\n{}'
+                               .format(self.group, self.port, msg))
+            try:
+                self.transport.sendto(msg, (self.group, self.port))
+            except (socket.error, AttributeError) as mcast_error:
+                error_msg = 'Error while sending multicast, reason:{}' \
+                    .format(mcast_error)
+                self.logging.error(error_msg)
+                # Force file descriptor closure
+                self.destroy()
+                raise MulticastException(error_msg)
 
     def send_unicast(self, msg, *address):
         """Unicast sender
@@ -258,7 +258,7 @@ class DatagramSocket(object):
         Raises:
             UnicastException - Socket level errors for multicasting
         """
-        if not isinstance(self.transport, socket.socket):
+        if not isinstance(self.transport, socket.socket) and len(msg) > 0:
             raise UnicastException("Cant send, not connected")
         try:
             self.transport.sendto(msg, address)
@@ -310,6 +310,8 @@ class DatagramSocket(object):
             # Force file descriptor closure
             self.destroy()
             raise UnicastException(error_msg)
+        self.logging.debug('Received MCAST:\n\n******* PACKAGE DATA *******\n\n{}\n******* END OF PACKAGE DATA *******\nFROM: {}:{}\n'
+                           .format(data, host, port))
         return UdpPackage(data, host, port)
 
     def destroy(self):

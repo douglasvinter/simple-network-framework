@@ -16,7 +16,7 @@ import Queue
 import logging
 import threading
 from networking import DatagramSocket, SocketSelector, \
-    MulticastException, UnicastException
+    MulticastException, UnicastException, get_host_address
 
 # Logging for debugging
 logging.basicConfig(level=logging.DEBUG,
@@ -128,16 +128,15 @@ class SSDPDaemon(threading.Thread):
         |_____________________|                       |___________________|
     """
 
-    USER_AGENT = 'Simple Network Framework / 0.1'
+    
 
-    def add_m_search(self, search_target,  max_wait=5, user_agent=None):
+    def add_m_search(self, search_target,  max_wait=5):
         """ Builds SSDP M-SEARCH payload and add to search strings, won't accept the same search_target
 
         Args:
             :param search_target: String containing ST tag according to UPnP documentation.
             :param max_wait: max wait / MX parameter for UPnP protocol, default is 5, which makes
                 both UPnP 1.0 and 1.1 reply (most cases)
-            :param user_agent: HTTP like browser agent, or any of your preference.
         :return bool:
         """
 
@@ -145,10 +144,9 @@ class SSDPDaemon(threading.Thread):
             if self._search_strings[i].find(search_target) > -1:
                 self.logging.info("ST: {} already registered, not added.".format(search_target))
                 return False
-        if user_agent is None:
-            user_agent = SSDPDaemon.USER_AGENT
         if upnp.is_valid_search_target(search_target) and upnp.is_valid_max_wait(max_wait):
-            self._search_strings.append(upnp.m_search(search_target, max_wait, user_agent))
+            self._search_strings.append(upnp.m_search(search_target, max_wait, self.user_agent))
+            self.logging.debug('Added new M-SEARCH for target: {}'.format(search_target))
             return True
         return False
 
@@ -162,14 +160,15 @@ class SSDPDaemon(threading.Thread):
         for i in xrange(len(self._search_strings)):
             if self._search_strings[i].find(search_target) > -1:
                 idx.append(i)
+                self.logging.debug('Removed M-SEARCH for target: {}'.format(self._search_strings[i]))
         self._search_strings = [v for k, v in enumerate(self._search_strings) if k not in idx]
 
 
 
     def __init__(self, server_usn='urn:schemas-upnp-org:service:SimpleNetworkFramework:1',
                  server_uuid='uuid:xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx',
-                 m_search_timeout=100.0, logger_name='SSDP Daemon',
-                 monitoring=False):
+                 user_agent= 'Simple Network Framework / 0.1', m_search_timeout=100.0,
+                 logger_name='SSDP Agent', monitoring=False):
         """Creates an SSDPDaemon agent to keep sending and receiving SSDP messages
 
         Args:
@@ -197,6 +196,7 @@ class SSDPDaemon(threading.Thread):
         # Flags for upnp:rootdevice and ssdp:all
         self.server_usn = server_usn
         self.server_uuid = server_uuid
+        self.user_agent = user_agent
         self.logging = logging.getLogger(logger_name)
         # Event M-SEARCH timeout in seconds
         assert (type(m_search_timeout) in [float, int]), \
@@ -220,13 +220,19 @@ class SSDPDaemon(threading.Thread):
                                      port=upnp.MULTICAST_PORT,
                                      ttl=upnp.MULTICAST_TTL)
         threading.Thread.__init__(self)
-
+        self.daemon = True
+        
     def run(self):
         """Overrides threading.Thread.run method
         basic daemon routine is to keep sending / receiving data
 
         Use methods: add_m_search and remove_m_search to manage this daemon
         """
+        self.logging.info('SSDP agent started!')
+        self.logging.info('Endpoint Flags')
+        self.logging.info('ST={}'.format(self.server_usn))
+        self.logging.info('UUID={}'.format(self.server_uuid))
+        self.logging.info('USER_AGENT={}'.format(self.user_agent))
         event_time = time.time()
         self.logging.info("UPnP server and client is running")
         while self.main_loop():
@@ -238,6 +244,7 @@ class SSDPDaemon(threading.Thread):
             # Can be done via threading.Timer as well
             # But here we`ve a easy way to control the timer
             if (time.time() - event_time) >= self.task_interval > 0:
+                self.logging.debug('sending M-SEARCH messages...')
                 self.m_search()
                 event_time = time.time()
 
@@ -258,22 +265,24 @@ class SSDPDaemon(threading.Thread):
         msg = ''
         payload = self.server.recv_dgram()
         payload = upnp.parse(payload)
+        self.logging.debug('Parsed payload:\n{}'.format(payload))
         if self.monitoring:
             self.server_out_q.put_nowait(payload)
-        if payload.host != self.server.get_host_address():
+        self.logging.debug('get_host_address()->{}-{}'.format(get_host_address(), payload['sender'][0]))
+        if payload['sender'][0] != get_host_address():
             try:
-                upnp.validate_search_target(payload['st'])
+                upnp.is_valid_search_target(payload['st'])
             except SSDPException:
                 # Invalid flag will be log as a warning
                 self.logging.warning('Detected a message out of standard from: {}:{}'
                                      .format(payload['sender'][0], payload['sender'][1]))
             else:
                 if payload['st'] == self.server_usn or payload['st'] == 'ssdp:all':
-                    msg = upnp.answer('device', payload['st'], self.server_usn)
+                    self.client.send_unicast(upnp.answer('device', payload['st'], self.server_usn),
+                                             *payload['sender'])
                 elif payload['st'] == self.server_uuid or payload['st'] == 'upnp:rootdevice':
-                    msg = upnp.answer('device', payload['st'], self.server_uuid)
-                # Empty messages wont be sent
-                self.client.send_unicast(msg, *payload['sender'])
+                    self.client.send_unicast(upnp.answer('device', payload['st'], self.server_uuid),
+                                             *payload['sender'])
 
     def handle_client(self):
         """Handles unicast received from a UPnP service/device"""
@@ -295,6 +304,7 @@ class SSDPDaemon(threading.Thread):
         for payload in search_strings:
             try:
                 self.client.send_multicast(payload)
+                self.logging.debug('Sending M-SEARCH: \n{}'.format(payload))
             except MulticastException:
                 pass
 
