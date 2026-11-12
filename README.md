@@ -3,7 +3,7 @@
 An asyncio-based, extensible framework for local network service discovery.
 
 SNF delegates wire-protocol implementation to established libraries. It provides a
-common service model, lifecycle management, a concurrent event stream, and a Python
+common service model, lifecycle management, event de-duplication, and a Python
 entry-point plugin system.
 
 ## Requirements
@@ -17,8 +17,7 @@ python -m pip install 'simple-network-framework[all]'
 
 For SLP, install OpenSLP separately so the OpenSLP slptool executable is available
 on PATH. OpenSLP is an OS-level dependency, not a Python wheel. Package names vary
-by platform (for example, openslp on Fedora-family distributions and openslp/slpd
-packages on Debian-family distributions).
+by platform.
 
 ## Quick start
 
@@ -51,8 +50,21 @@ To include SLP, instantiate its adapter after installing OpenSLP:
 ```python
 from snf.adapters.slp import SLPPlugin
 
-slp = SLPPlugin()  # discovers service types and searches each one
+slp = SLPPlugin()
 ```
+
+## Event de-duplication
+
+The discovery engine maintains a bounded in-memory registry (4,096 services by
+default). Repeated identical announcements are suppressed. A change to a known
+service's address, port, or metadata is emitted as UPDATED; a known service's
+REMOVED event is emitted once and clears its registry entry, allowing a later
+announcement to be emitted as ADDED again.
+
+Registry identity is protocol + service name + service type. It intentionally
+does not merge SSDP and mDNS records into a physical-device identity: cross-protocol
+device correlation needs a separate model and stronger identifiers. Tune the bound
+with `DiscoveryEngine(..., dedupe_cache_size=...)`.
 
 ## Third-party plugins
 
@@ -74,9 +86,8 @@ sockets and protocol state; the engine handles lifecycle and merges event stream
 | mDNS / DNS-SD | python-zeroconf | Service browsing, resolution, IPv4/IPv6 |
 | SLPv2 | OpenSLP slptool | User Agent lookups, scopes and Directory Agent discovery |
 
-The SLP adapter delegates the RFC 2608 wire protocol, multicast convergence,
-and Directory Agent behavior to OpenSLP. It uses the supported OpenSLP command
-line interface rather than a stale Python binding around native libslp.
+The SLP adapter delegates RFC 2608 wire protocol behavior to OpenSLP and uses
+its command-line interface rather than an unmaintained Python binding.
 
 ## Development
 
