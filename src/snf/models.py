@@ -28,6 +28,6 @@ class Service:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     @property
-    def identity(self) -> tuple[str, str, str, int | None]:
-        """Return a stable key suitable for a discovery cache."""
-        return (self.protocol, self.name, self.address, self.port)
+    def identity(self) -> tuple[str, str, str | None]:
+        """Return a protocol-scoped identity stable across endpoint changes."""
+        return (self.protocol, self.name, self.service_type)
