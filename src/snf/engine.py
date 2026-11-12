@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Iterable
 
 from snf.models import Service
 from snf.plugins import DiscoveryPlugin
+from snf.registry import ServiceRegistry
 
 _LOGGER = logging.getLogger(__name__)
 _DONE = object()
@@ -17,11 +18,19 @@ _DONE = object()
 class DiscoveryEngine:
     """Run multiple protocol plugins behind one asynchronous interface."""
 
-    def __init__(self, plugins: Iterable[DiscoveryPlugin]) -> None:
+    def __init__(
+        self,
+        plugins: Iterable[DiscoveryPlugin],
+        *,
+        dedupe_cache_size: int = 4096,
+    ) -> None:
         self._plugins = tuple(plugins)
         names = [plugin.name for plugin in self._plugins]
         if len(names) != len(set(names)):
             raise ValueError("Only one instance of each protocol plugin is allowed")
+        if dedupe_cache_size < 1:
+            raise ValueError("dedupe_cache_size must be at least 1")
+        self._dedupe_cache_size = dedupe_cache_size
         self._started = False
 
     async def __aenter__(self) -> DiscoveryEngine:
@@ -69,18 +78,16 @@ class DiscoveryEngine:
             await queue.put(_DONE)
 
     async def discover(self) -> AsyncIterator[Service]:
-        """Merge events from all active plugins into one asynchronous iterator."""
+        """Merge plugin streams and suppress duplicate service announcements."""
         if not self._started:
             raise RuntimeError("Use DiscoveryEngine as an async context manager first")
         if not self._plugins:
             return
 
         queue: asyncio.Queue[object] = asyncio.Queue()
+        registry = ServiceRegistry(max_entries=self._dedupe_cache_size)
         tasks = [
-            asyncio.create_task(
-                self._pump(plugin, queue),
-                name=f"snf:{plugin.name}",
-            )
+            asyncio.create_task(self._pump(plugin, queue), name=f"snf:{plugin.name}")
             for plugin in self._plugins
         ]
         remaining = len(tasks)
@@ -91,7 +98,9 @@ class DiscoveryEngine:
                     remaining -= 1
                 else:
                     assert isinstance(item, Service)
-                    yield item
+                    event = registry.process(item)
+                    if event is not None:
+                        yield event
         finally:
             for task in tasks:
                 if not task.done():
