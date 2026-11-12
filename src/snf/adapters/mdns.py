@@ -96,7 +96,7 @@ class MDNSPlugin:
             (
                 value.decode("utf-8", errors="replace")
                 if isinstance(value, bytes)
-                else str(value)
+                else ("" if value is None else str(value))
             )
             for key, value in info.properties.items()
         }
