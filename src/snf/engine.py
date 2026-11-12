@@ -33,7 +33,10 @@ class DiscoveryEngine:
                 await plugin.start()
                 started.append(plugin)
         except BaseException:
-            await asyncio.gather(*(p.stop() for p in reversed(started)), return_exceptions=True)
+            await asyncio.gather(
+                *(plugin.stop() for plugin in reversed(started)),
+                return_exceptions=True,
+            )
             raise
         self._started = True
         return self
@@ -47,7 +50,8 @@ class DiscoveryEngine:
             return
         self._started = False
         results = await asyncio.gather(
-            *(plugin.stop() for plugin in reversed(self._plugins)), return_exceptions=True
+            *(plugin.stop() for plugin in reversed(self._plugins)),
+            return_exceptions=True,
         )
         for plugin, result in zip(reversed(self._plugins), results, strict=True):
             if isinstance(result, BaseException):
@@ -70,8 +74,15 @@ class DiscoveryEngine:
             raise RuntimeError("Use DiscoveryEngine as an async context manager first")
         if not self._plugins:
             return
+
         queue: asyncio.Queue[object] = asyncio.Queue()
-        tasks = [asyncio.create_task(self._pump(p, queue), name=f"snf:{p.name}") for p in self._plugins]
+        tasks = [
+            asyncio.create_task(
+                self._pump(plugin, queue),
+                name=f"snf:{plugin.name}",
+            )
+            for plugin in self._plugins
+        ]
         remaining = len(tasks)
         try:
             while remaining:
