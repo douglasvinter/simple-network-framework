@@ -74,6 +74,9 @@ class SSDPPlugin:
                 timeout=self.search_timeout,
                 search_target=self.search_target,
             )
+            # async-upnp-client schedules async callbacks as tasks; give them a
+            # turn to enqueue their already-received responses before draining.
+            await asyncio.sleep(0)
             while not discovered.empty():
                 yield discovered.get_nowait()
 
