@@ -14,14 +14,22 @@ class SSDPPlugin:
 
     name = "ssdp"
 
-    def __init__(self, *, search_target: str = "ssdp:all", search_interval: float = 30.0,
-                 search_timeout: int = 5) -> None:
+    def __init__(
+        self,
+        *,
+        search_target: str = "ssdp:all",
+        search_interval: float = 30.0,
+        search_timeout: int = 5,
+    ) -> None:
         if search_interval <= 0:
             raise ValueError("search_interval must be positive")
         if not 1 <= search_timeout <= 120:
             raise ValueError("search_timeout must be between 1 and 120 seconds")
         if find_spec("async_upnp_client") is None:
-            raise ImportError("Install SSDP support with: pip install 'simple-network-framework[ssdp]'")
+            raise ImportError(
+                "Install SSDP support with: "
+                "pip install 'simple-network-framework[ssdp]'"
+            )
         self.search_target = search_target
         self.search_interval = search_interval
         self.search_timeout = search_timeout
@@ -35,6 +43,7 @@ class SSDPPlugin:
     async def discover(self) -> AsyncIterator[Service]:
         if not self._running:
             raise RuntimeError("SSDPPlugin.start() must be called before discover()")
+
         from async_upnp_client.search import async_search
 
         while self._running:
@@ -49,18 +58,25 @@ class SSDPPlugin:
                 port = int(raw_port) if raw_port is not None else None
                 usn = str(values.get("usn", ""))
                 location = values.get("location")
-                await discovered.put(Service(
-                    protocol=self.name,
-                    name=usn or str(location or host),
-                    address=host,
-                    port=port,
-                    service_type=str(values.get("st", "")) or None,
-                    metadata=values,
-                ))
+                await discovered.put(
+                    Service(
+                        protocol=self.name,
+                        name=usn or str(location or host),
+                        address=host,
+                        port=port,
+                        service_type=str(values.get("st", "")) or None,
+                        metadata=values,
+                    )
+                )
 
-            await async_search(async_callback=on_response, timeout=self.search_timeout)
+            await async_search(
+                async_callback=on_response,
+                timeout=self.search_timeout,
+                search_target=self.search_target,
+            )
             while not discovered.empty():
                 yield discovered.get_nowait()
+
             try:
                 await asyncio.wait_for(
                     self._stop_event.wait(),
