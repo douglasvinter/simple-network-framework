@@ -1,216 +1,105 @@
 # Simple Network Framework
 
-Open Source project for network discovery protocols.
+An asyncio-based, extensible framework for local network service discovery.
 
-- Why not twisted, Tornado and etc?
-    * This framework purpose is to be lightweight and use the minimum external dependencies as possible
+SNF delegates wire-protocol implementation to established libraries. It provides a
+common service model, lifecycle management, event de-duplication, and a Python
+entry-point plugin system.
 
-- Protocols planned for implementation:
-    * UPnP / SSDP - Done
-    * mDNS - TODO
-    * SLP - TODO
+## Requirements
 
-#SSDP Discovery
+- Python 3.11 or newer.
+- Install Python protocol dependencies through extras:
 
-Running with playground.py * Test & learning sample *
+```bash
+python -m pip install 'simple-network-framework[all]'
+```
 
-	douglasvinter@environment:~/github/simple-network-framework$ python playground.py 
-	douglasb@linuxcit012107:~/github/simple-network-framework$ python playground.py 
-	[04/20 16:43:24] SSDP Agent      INFO    : SSDP agent started!
-	[04/20 16:43:24] SSDP Agent      DEBUG   : Added new M-SEARCH for target: ssdp:all
-	[04/20 16:43:24] SSDP Agent      INFO    : Endpoint Flags
-	[04/20 16:43:24] SSDP Agent      DEBUG   : Press Ctrl+C to quit
-	[04/20 16:43:24] SSDP Agent      INFO    : ST=urn:schemas-upnp-org:service:SimpleNetworkFramework:1
-	[04/20 16:43:24] SSDP Agent      INFO    : UUID=uuid:xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-	[04/20 16:43:24] SSDP Agent      INFO    : USER_AGENT=Simple Network Framework / 0.1
-	[04/20 16:43:24] SSDP Agent      INFO    : UPnP server and client is running
-	[04/20 17:14:40] SSDP Agent      DEBUG   : sending M-SEARCH messages...
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Sending data for target 239.255.255.250:1900:
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	USER-AGENT: Simple Network Framework / 0.1
-	
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Sending M-SEARCH: 
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	USER-AGENT: Simple Network Framework / 0.1
-	
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	USER-AGENT: Simple Network Framework / 0.1
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.19.100:54899
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Parsed payload:
-	{'host': '239.255.255.250:1900', 'sender': ['172.16.19.100', 54899], 'st': 'ssdp:all', 'man': '"ssdp:discover"', 'mx': '5', 'user-agent': 'Simple Network Framework / 0.1'}
-	[04/20 17:14:40] SSDP Agent      DEBUG   : get_host_address()->172.16.19.100-172.16.19.100
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	HTTP/1.1 200 OK
-	Location: http://172.16.47.72:1850/
-	Cache-Control: max-age=1800
-	Server: Linux/i686 UPnP/1.0 DLNADOC/1.50 Platinum/1.0.3.0
-	USN: uuid:d093c502-b0ca-e13c-2f0a-609cbefe3080::urn:lge-com:device:SSTDevice:1
-	ST: urn:lge-com:device:SSTDevice:1
-	EXT: 
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.47.72:1900
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	HTTP/1.1 200 OK
-	CACHE-CONTROL: max-age=1800
-	LOCATION: http://172.16.47.68:7676/smp_11_
-	ST: urn:schemas-upnp-org:service:ConnectionManager:1
-	SERVER: SHP, UPnP/1.0, Samsung UPnP SDK/1.0
-	USN: uuid:0c845881-00d2-1000-9130-ccb11a7ca518::urn:schemas-upnp-org:service:ConnectionManager:1
-	EXT: 
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.47.68:1900
+For SLP, install OpenSLP separately so the OpenSLP slptool executable is available
+on PATH. OpenSLP is an OS-level dependency, not a Python wheel. Package names vary
+by platform.
 
-	^C[04/20 16:46:29] SSDP Agent      INFO    : SSDP Daemon stopped
-	[04/20 16:46:29] SSDP Agent      DEBUG   : Closing RDWR for socket
-	[04/20 16:46:29] SSDP Agent      DEBUG   : Closing RDWR for socket
-	[04/20 16:46:29] SSDP Agent      DEBUG   : Bye!
-	douglasvinter@environment:~/github/simple-network-framework$ 
+## Quick start
+
+```python
+import asyncio
+from snf import DiscoveryEngine, load_plugins
 
 
-Network discovery with SSDPDaemon running
+async def main() -> None:
+    plugins = load_plugins()
+    selected = [plugins[name]() for name in ("ssdp", "mdns")]
+    async with DiscoveryEngine(selected) as discovery:
+        async for service in discovery.discover():
+            print(service)
 
-    douglasvinter@environment:~/github/simple-network-framework$ python
-    Python 2.7.12 (default, Nov 19 2016, 06:48:10) 
-	[GCC 5.4.0 20160609] on linux2
-	Type "help", "copyright", "credits" or "license" for more information.
-	>>> from protocols.discovery import SSDPDaemon
-	>>> endpoint = SSDPDaemon()
-	>>> endpoint.add_m_search('ssdp:all')
-	[04/20 17:05:58] SSDP Agent      DEBUG   : Added new M-SEARCH for target: ssdp:all
-	True
-	>>> endpoint.start()	
-	[04/20 17:14:30] SSDP Agent      INFO    : SSDP agent started!
-	[04/20 17:14:30] SSDP Agent      DEBUG   : Added new M-SEARCH for target: ssdp:all
-	[04/20 17:14:30] SSDP Agent      INFO    : Endpoint Flags
-	[04/20 17:14:30] SSDP Agent      DEBUG   : Press Ctrl+C to quit
-	[04/20 17:14:30] SSDP Agent      INFO    : ST=urn:schemas-upnp-org:service:SimpleNetworkFramework:1
-	[04/20 17:14:30] SSDP Agent      INFO    : UUID=uuid:xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-	[04/20 17:14:30] SSDP Agent      INFO    : USER_AGENT=Simple Network Framework / 0.1
-	[04/20 17:14:30] SSDP Agent      INFO    : UPnP server and client is running
-	[04/20 17:14:40] SSDP Agent      DEBUG   : sending M-SEARCH messages...
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Sending data for target 239.255.255.250:1900:
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	USER-AGENT: Simple Network Framework / 0.1
-	
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Sending M-SEARCH: 
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	USER-AGENT: Simple Network Framework / 0.1
-	
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	M-SEARCH * HTTP/1.1
-	HOST: 239.255.255.250:1900
-	MAN: "ssdp:discover"
-	ST: ssdp:all
-	MX: 5
-	USER-AGENT: Simple Network Framework / 0.1
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.19.100:54899
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Parsed payload:
-	{'host': '239.255.255.250:1900', 'sender': ['172.16.19.100', 54899], 'st': 'ssdp:all', 'man': '"ssdp:discover"', 'mx': '5', 'user-agent': 'Simple Network Framework / 0.1'}
-	[04/20 17:14:40] SSDP Agent      DEBUG   : get_host_address()->172.16.19.100-172.16.19.100
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	HTTP/1.1 200 OK
-	Location: http://172.16.47.72:1850/
-	Cache-Control: max-age=1800
-	Server: Linux/i686 UPnP/1.0 DLNADOC/1.50 Platinum/1.0.3.0
-	USN: uuid:d093c502-b0ca-e13c-2f0a-609cbefe3080::urn:lge-com:device:SSTDevice:1
-	ST: urn:lge-com:device:SSTDevice:1
-	EXT: 
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.47.72:1900
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	HTTP/1.1 200 OK
-	CACHE-CONTROL: max-age=1800
-	LOCATION: http://172.16.47.68:7676/smp_11_
-	ST: urn:schemas-upnp-org:service:ConnectionManager:1
-	SERVER: SHP, UPnP/1.0, Samsung UPnP SDK/1.0
-	USN: uuid:0c845881-00d2-1000-9130-ccb11a7ca518::urn:schemas-upnp-org:service:ConnectionManager:1
-	EXT: 
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.47.68:1900
-	
-	[04/20 17:14:40] SSDP Agent      DEBUG   : Received MCAST:
-	
-	******* PACKAGE DATA *******
-	
-	HTTP/1.1 200 OK
-	CACHE-CONTROL: max-age=1800
-	LOCATION: http://172.16.47.60:52323/dmr.xml
-	ST: urn:schemas-upnp-org:service:ConnectionManager:1
-	SERVER: Linux/2.6 UPnP/1.0 KDL-32W605A/1.7
-	USN: uuid:00000000-0000-1010-8000-d8d43c469f0b::urn:schemas-upnp-org:service:ConnectionManager:1
-	X-AV-Physical-Unit-Info: pa="BRAVIA KDL-32W605A";
-	X-AV-Server-Info: av=5.0; cn="Sony Corporation"; mn="BRAVIA KDL-32W605A"; mv="1.7";
-	EXT: 
-	
-	
-	******* END OF PACKAGE DATA *******
-	FROM: 172.16.47.60:1900
 
-	^C[04/20 17:15:34] SSDP Agent      INFO    : SSDP Daemon stopped
-	[04/20 17:15:34] SSDP Agent      DEBUG   : Closing RDWR for socket
-	[04/20 17:15:34] SSDP Agent      DEBUG   : Closing RDWR for socket
-	[04/20 17:15:34] SSDP Agent      DEBUG   : Bye!
-	douglasvinter@environment:~/github/simple-network-framework$
+asyncio.run(main())
+```
 
-	
+To browse specific DNS-SD types, instantiate the adapter directly:
+
+```python
+from snf.adapters.mdns import MDNSPlugin
+
+mdns = MDNSPlugin(["_http._tcp.local.", "_ssh._tcp.local."])
+```
+
+To include SLP, instantiate its adapter after installing OpenSLP:
+
+```python
+from snf.adapters.slp import SLPPlugin
+
+slp = SLPPlugin()
+```
+
+## Event de-duplication
+
+The discovery engine maintains a bounded in-memory registry (4,096 services by
+default). Repeated identical announcements are suppressed. A change to a known
+service's address, port, or metadata is emitted as UPDATED; a known service's
+REMOVED event is emitted once and clears its registry entry, allowing a later
+announcement to be emitted as ADDED again.
+
+Registry identity is protocol + service name + service type. It intentionally
+does not merge SSDP and mDNS records into a physical-device identity: cross-protocol
+device correlation needs a separate model and stronger identifiers. Tune the bound
+with `DiscoveryEngine(..., dedupe_cache_size=...)`.
+
+## Third-party plugins
+
+Register an entry point in your plugin distribution:
+
+```toml
+[project.entry-points."snf.protocols"]
+my-protocol = "my_snf_plugin:MyProtocolPlugin"
+```
+
+A plugin implements async start(), discover(), and stop() methods. It owns its
+sockets and protocol state; the engine handles lifecycle and merges event streams.
+
+## Included adapters
+
+| Adapter | Backend | Capabilities |
+| --- | --- | --- |
+| SSDP / UPnP | async-upnp-client | Search responses and device metadata |
+| mDNS / DNS-SD | python-zeroconf | Service browsing, resolution, IPv4/IPv6 |
+| SLPv2 | OpenSLP slptool | User Agent lookups, scopes and Directory Agent discovery |
+
+The SLP adapter delegates RFC 2608 wire protocol behavior to OpenSLP and uses
+its command-line interface rather than an unmaintained Python binding.
+
+## Development
+
+```bash
+python -m pip install -e '.[all,dev]'
+pytest
+ruff check .
+mypy src
+```
+
+## Security
+
+Discovery responses are untrusted input. SNF does not automatically fetch SSDP
+LOCATION URLs or invoke discovered services. Applications must validate destinations
+and enforce their own network access policy before making follow-up requests.
