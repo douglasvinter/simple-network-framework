@@ -9,18 +9,16 @@ entry-point plugin system.
 ## Requirements
 
 - Python 3.11 or newer.
-- Install protocol support through extras:
+- Install Python protocol dependencies through extras:
 
 ```bash
 python -m pip install 'simple-network-framework[all]'
 ```
 
-Or install only what you need:
-
-```bash
-python -m pip install 'simple-network-framework[ssdp]'
-python -m pip install 'simple-network-framework[mdns]'
-```
+For SLP, install OpenSLP separately so the OpenSLP slptool executable is available
+on PATH. OpenSLP is an OS-level dependency, not a Python wheel. Package names vary
+by platform (for example, openslp on Fedora-family distributions and openslp/slpd
+packages on Debian-family distributions).
 
 ## Quick start
 
@@ -48,6 +46,14 @@ from snf.adapters.mdns import MDNSPlugin
 mdns = MDNSPlugin(["_http._tcp.local.", "_ssh._tcp.local."])
 ```
 
+To include SLP, instantiate its adapter after installing OpenSLP:
+
+```python
+from snf.adapters.slp import SLPPlugin
+
+slp = SLPPlugin()  # discovers service types and searches each one
+```
+
 ## Third-party plugins
 
 Register an entry point in your plugin distribution:
@@ -66,10 +72,11 @@ sockets and protocol state; the engine handles lifecycle and merges event stream
 | --- | --- | --- |
 | SSDP / UPnP | async-upnp-client | Search responses and device metadata |
 | mDNS / DNS-SD | python-zeroconf | Service browsing, resolution, IPv4/IPv6 |
+| SLPv2 | OpenSLP slptool | User Agent lookups, scopes and Directory Agent discovery |
 
-SLP is not registered yet: a native Python implementation with sufficient
-maintenance and interoperability evidence has not been selected. We will not ship
-a placeholder or partial protocol implementation.
+The SLP adapter delegates the RFC 2608 wire protocol, multicast convergence,
+and Directory Agent behavior to OpenSLP. It uses the supported OpenSLP command
+line interface rather than a stale Python binding around native libslp.
 
 ## Development
 
