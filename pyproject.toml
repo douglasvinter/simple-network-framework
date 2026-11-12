@@ -4,11 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "simple-network-framework"
-version = "1.0.0"
+version = "0.2.0a1"
 description = "An extensible asyncio framework for local network service discovery."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
 authors = [{ name = "Douglas Vinter" }]
 dependencies = []
 
