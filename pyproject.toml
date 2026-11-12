@@ -21,6 +21,7 @@ dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.14", "mypy>=1.18"]
 [project.entry-points."snf.protocols"]
 ssdp = "snf.adapters.ssdp:SSDPPlugin"
 mdns = "snf.adapters.mdns:MDNSPlugin"
+slp = "snf.adapters.slp:SLPPlugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/snf"]
