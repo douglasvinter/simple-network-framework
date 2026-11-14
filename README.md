@@ -120,6 +120,49 @@ python examples/discover_all.py
   protocols. Prefer configuring the firewall and interface permissions rather
   than running the application with elevated privileges.
 
+### macOS
+
+**What you need**
+
+- macOS 12 or newer.
+- Python 3.11+ (for example, from python.org or Homebrew).
+- Access to the same LAN as the devices you want to discover.
+- Local Network access for the terminal application running Python, if macOS
+  requests permission.
+- For SLP only: an OpenSLP installation that provides the `slptool` executable
+  and makes it available on `PATH`. SNF does not bundle OpenSLP.
+
+**Install**
+
+Run these commands in Terminal from the project directory:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[all]'
+```
+
+**Run the example**
+
+```bash
+python examples/discover_all.py
+```
+
+**macOS networking notes**
+
+- When macOS asks whether the terminal application (such as Terminal or iTerm)
+  may access devices on your local network, allow it if you want to discover
+  local services. You can review this permission under **System Settings >
+  Privacy & Security > Local Network**.
+- The macOS application firewall and third-party endpoint security tools may
+  affect incoming discovery traffic. Review their rules if devices are not found.
+- SSDP uses UDP multicast (IPv4 group `239.255.255.250`, port `1900`); mDNS uses
+  UDP multicast (IPv4 group `224.0.0.251`, port `5353`). macOS includes Bonjour
+  support for mDNS, but SNF still installs and uses its Python `zeroconf` backend.
+- VPNs, multiple network interfaces, guest Wi-Fi, client isolation, and
+  VLAN/subnet boundaries can prevent multicast discovery.
+
 ## Quick start
 
 ```python
