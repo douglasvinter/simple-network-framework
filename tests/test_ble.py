@@ -1,4 +1,7 @@
+import asyncio
 from types import SimpleNamespace
+
+import pytest
 
 from snf.adapters.ble import BLEPlugin
 
@@ -22,11 +25,6 @@ def test_ble_advertisement_is_normalized_without_connecting():
     assert result.metadata["rssi"] == -61
     assert result.metadata["manufacturer_data"] == {"76": "0102"}
     assert result.services[0].service_type == "bluetooth-le-advertised-service"
-
-
-import asyncio
-
-import pytest
 
 
 @pytest.mark.asyncio
