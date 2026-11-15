@@ -5,11 +5,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from typing import TYPE_CHECKING
 from collections.abc import AsyncIterator, Iterable
 
 from snf.models import DiscoveryEvent
 from snf.plugins import DiscoveryPlugin
 from snf.registry import DeviceRegistry
+
+if TYPE_CHECKING:
+    from snf.models import Device
 
 _LOGGER = logging.getLogger(__name__)
 _DONE = object()
@@ -34,11 +38,11 @@ class DiscoveryEngine:
         self._started = False
 
     @property
-    def devices(self):
+    def devices(self) -> tuple[Device, ...]:
         """Return the current in-memory device inventory as an immutable snapshot."""
         return self._registry.snapshot()
 
-    def get_device(self, protocol: str, identifier: str):
+    def get_device(self, protocol: str, identifier: str) -> Device | None:
         """Look up a device by its protocol-scoped identifier."""
         return self._registry.get(protocol, identifier)
 
