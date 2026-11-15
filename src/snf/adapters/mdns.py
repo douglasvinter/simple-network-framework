@@ -28,6 +28,9 @@ DEFAULT_SERVICE_TYPES = [
     "_device-info._tcp.local.", "_occam._udp.local.",
 ]
 
+# Backward-compatible name retained for existing examples and integrations.
+ALL_MDSNS_SERVICE_TYPES = DEFAULT_SERVICE_TYPES
+
 
 class MDNSPlugin:
     """Browse and resolve DNS-SD service instances."""
