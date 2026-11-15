@@ -79,14 +79,25 @@ class DiscoveryEngine:
         await self._stop_plugins()
 
     async def _pump(self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]) -> None:
+        _LOGGER.debug("Discovery pump started for plugin %s", plugin.name)
         try:
             async for service in plugin.discover():
+                _LOGGER.debug(
+                    "Plugin %s yielded %s service %s at %s:%s",
+                    plugin.name,
+                    service.state.value,
+                    service.name,
+                    service.address,
+                    service.port or "-",
+                )
                 await queue.put(service)
         except asyncio.CancelledError:
+            _LOGGER.debug("Discovery pump cancelled for plugin %s", plugin.name)
             raise
         except Exception:
             _LOGGER.exception("Discovery plugin %s failed", plugin.name)
         finally:
+            _LOGGER.debug("Discovery pump stopped for plugin %s", plugin.name)
             await queue.put(_DONE)
 
     async def discover(self) -> AsyncIterator[Service]:
@@ -98,6 +109,10 @@ class DiscoveryEngine:
 
         queue: asyncio.Queue[object] = asyncio.Queue()
         registry = ServiceRegistry(max_entries=self._dedupe_cache_size)
+        _LOGGER.debug(
+            "Starting concurrent discovery for plugins: %s",
+            ", ".join(plugin.name for plugin in self._plugins),
+        )
         tasks = [
             asyncio.create_task(self._pump(plugin, queue), name=f"snf:{plugin.name}")
             for plugin in self._plugins
