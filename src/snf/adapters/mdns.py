@@ -54,7 +54,7 @@ class MDNSPlugin:
         self.resolve_timeout = resolve_timeout
         self.interfaces = interfaces
         self.type_discovery_timeout = type_discovery_timeout
-        self._events: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
+        self._events: asyncio.Queue[DiscoveryEvent | None] = asyncio.Queue()
         self._zeroconf: Any = None
         self._browsers: list[Any] = []
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -142,12 +142,16 @@ class MDNSPlugin:
         if self._zeroconf is None:
             raise RuntimeError("MDNSPlugin.start() must be called before discover()")
         while True:
-            yield await self._events.get()
+            event = await self._events.get()
+            if event is None:
+                return
+            yield event
 
     async def stop(self) -> None:
         for browser in self._browsers:
             await browser.async_cancel()
         self._browsers.clear()
+        self._events.put_nowait(None)
         if self._zeroconf is not None:
             await self._zeroconf.async_close()
             self._zeroconf = None
