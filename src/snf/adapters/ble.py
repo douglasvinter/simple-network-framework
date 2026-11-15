@@ -103,8 +103,8 @@ class BLEPlugin:
                 and previous_metadata == current_metadata
             )
             rssi_change = (
-                previous_rssi is None
-                or current_rssi is None
+                not isinstance(previous_rssi, int)
+                or not isinstance(current_rssi, int)
                 or abs(previous_rssi - current_rssi) >= self.rssi_update_threshold
             )
             if same_advertisement and not rssi_change:
