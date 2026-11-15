@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING
 from collections.abc import AsyncIterator, Iterable
+from typing import TYPE_CHECKING
 
 from snf.models import DiscoveryEvent
 from snf.plugins import DiscoveryPlugin
