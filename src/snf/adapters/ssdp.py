@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
 
 from snf.models import Service
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SSDPPlugin:
@@ -47,6 +50,11 @@ class SSDPPlugin:
         from async_upnp_client.search import async_search
 
         while self._running:
+            _LOGGER.debug(
+                "Starting SSDP search: target=%s timeout=%ss",
+                self.search_target,
+                self.search_timeout,
+            )
             discovered: asyncio.Queue[Service] = asyncio.Queue()
 
             async def on_response(headers: object) -> None:
@@ -77,6 +85,8 @@ class SSDPPlugin:
             # async-upnp-client schedules async callbacks as tasks; give them a
             # turn to enqueue their already-received responses before draining.
             await asyncio.sleep(0)
+            response_count = discovered.qsize()
+            _LOGGER.debug("SSDP search completed with %d response(s)", response_count)
             while not discovered.empty():
                 yield discovered.get_nowait()
 
