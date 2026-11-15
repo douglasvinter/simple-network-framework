@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from snf.engine import DiscoveryEngine
@@ -33,6 +35,55 @@ async def test_engine_lifecycle_and_discovery():
         assert len(results) == 1
         assert results[0].address == "127.0.0.1"
     assert plugin.stopped
+
+
+@pytest.mark.asyncio
+async def test_engine_starts_plugins_concurrently():
+    first_started = asyncio.Event()
+    second_started = asyncio.Event()
+
+    class CoordinatedPlugin(FakePlugin):
+        def __init__(self, name, own_started, peer_started):
+            self.name = name
+            self.own_started = own_started
+            self.peer_started = peer_started
+            super().__init__(events=[])
+
+        async def start(self):
+            self.started = True
+            self.own_started.set()
+            await asyncio.wait_for(self.peer_started.wait(), timeout=1)
+
+    first = CoordinatedPlugin("first", first_started, second_started)
+    second = CoordinatedPlugin("second", second_started, first_started)
+
+    async with DiscoveryEngine([first, second]):
+        assert first.started
+        assert second.started
+
+    assert first.stopped
+    assert second.stopped
+
+
+@pytest.mark.asyncio
+async def test_engine_cleans_up_all_plugins_when_startup_fails():
+    class FailingPlugin(FakePlugin):
+        async def start(self):
+            # Simulate allocating a resource before startup fails.
+            self.started = True
+            raise RuntimeError("startup failed")
+
+    healthy = FakePlugin()
+    failing = FailingPlugin()
+
+    with pytest.raises(RuntimeError, match="startup failed"):
+        async with DiscoveryEngine([healthy, failing]):
+            pytest.fail("The context manager must not be entered")
+
+    assert healthy.started
+    assert failing.started
+    assert healthy.stopped
+    assert failing.stopped
 
 
 @pytest.mark.asyncio
