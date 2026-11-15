@@ -24,9 +24,12 @@ class BLEPlugin:
         service_uuids: list[str] | None = None,
         scanning_mode: str = "active",
         device_timeout: float = 15.0,
+        rssi_update_threshold: int = 5,
     ) -> None:
         if device_timeout <= 0:
             raise ValueError("device_timeout must be positive")
+        if rssi_update_threshold < 1:
+            raise ValueError("rssi_update_threshold must be at least 1")
         if find_spec("bleak") is None:
             raise ImportError(
                 "Install BLE support with: pip install 'simple-network-framework[ble]'"
@@ -34,9 +37,11 @@ class BLEPlugin:
         self.service_uuids = service_uuids
         self.scanning_mode = scanning_mode
         self.device_timeout = device_timeout
+        self.rssi_update_threshold = rssi_update_threshold
         self._scanner: Any = None
         self._events: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
         self._last_seen: dict[str, float] = {}
+        self._last_emitted: dict[str, Device] = {}
         self._expiry_task: asyncio.Task[None] | None = None
         self._running = False
 
@@ -59,7 +64,7 @@ class BLEPlugin:
             str(uuid): bytes(value).hex()
             for uuid, value in (getattr(advertisement_data, "service_data", {}) or {}).items()
         }
-        endpoint = Endpoint("ble", address, metadata={"rssi": rssi})
+        endpoint = Endpoint("ble", address)
         services = tuple(
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
             for uuid in service_uuids
@@ -85,6 +90,26 @@ class BLEPlugin:
             return
         record = self._to_device(device, advertisement_data)
         self._last_seen[record.identifier] = asyncio.get_running_loop().time()
+        previous = self._last_emitted.get(record.identifier)
+        if previous is not None:
+            previous_metadata = dict(previous.metadata)
+            current_metadata = dict(record.metadata)
+            previous_rssi = previous_metadata.pop("rssi", None)
+            current_rssi = current_metadata.pop("rssi", None)
+            same_advertisement = (
+                previous.name == record.name
+                and previous.endpoints == record.endpoints
+                and previous.services == record.services
+                and previous_metadata == current_metadata
+            )
+            rssi_change = (
+                previous_rssi is None
+                or current_rssi is None
+                or abs(previous_rssi - current_rssi) >= self.rssi_update_threshold
+            )
+            if same_advertisement and not rssi_change:
+                return
+        self._last_emitted[record.identifier] = record
         self._events.put_nowait(DiscoveryEvent(DiscoveryState.ADDED, record))
 
     async def start(self) -> None:
@@ -92,6 +117,7 @@ class BLEPlugin:
 
         self._running = True
         self._last_seen.clear()
+        self._last_emitted.clear()
         self._scanner = BleakScanner(
             detection_callback=self._on_advertisement,
             service_uuids=self.service_uuids,
@@ -119,6 +145,7 @@ class BLEPlugin:
             ]
             for address in expired:
                 self._last_seen.pop(address, None)
+                self._last_emitted.pop(address, None)
                 device = Device(
                     protocol=self.name, identifier=address, name=address
                 )
