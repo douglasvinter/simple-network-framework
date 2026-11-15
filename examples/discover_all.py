@@ -14,7 +14,6 @@ logging.getLogger("snf").setLevel(logging.DEBUG)
 
 _LOGGER = logging.getLogger(__name__)
 
-
 async def main() -> None:
     available = load_plugins()
     selected = [
