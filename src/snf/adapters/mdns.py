@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any
 
 from snf.models import Service, ServiceState
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class MDNSPlugin:
@@ -52,7 +55,9 @@ class MDNSPlugin:
                     timeout=self.type_discovery_timeout,
                 )
             )
+        _LOGGER.debug("Discovered %d mDNS service types: %s", len(types), types)
         for service_type in types:
+            _LOGGER.debug("Starting mDNS browser for %s", service_type)
             self._browsers.append(
                 AsyncServiceBrowser(
                     self._zeroconf.zeroconf,
@@ -64,6 +69,12 @@ class MDNSPlugin:
     def _on_service_state_change(
         self, zeroconf: Any, service_type: str, name: str, state_change: Any
     ) -> None:
+        _LOGGER.debug(
+            "mDNS browser reported %s for %s (%s)",
+            state_change,
+            name,
+            service_type,
+        )
         if self._loop is not None and not self._loop.is_closed():
             self._loop.create_task(self._resolve(service_type, name, state_change))
 
