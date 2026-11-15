@@ -36,28 +36,33 @@ class DiscoveryEngine:
     async def __aenter__(self) -> DiscoveryEngine:
         if self._started:
             raise RuntimeError("DiscoveryEngine is already running")
-        started: list[DiscoveryPlugin] = []
+
         try:
-            for plugin in self._plugins:
-                await plugin.start()
-                started.append(plugin)
-        except BaseException:
-            await asyncio.gather(
-                *(plugin.stop() for plugin in reversed(started)),
+            results = await asyncio.gather(
+                *(plugin.start() for plugin in self._plugins),
                 return_exceptions=True,
             )
+        except BaseException:
+            # A cancelled or interrupted startup may have left plugins with
+            # partially allocated resources. Ask every plugin to clean up.
+            await self._stop_plugins()
             raise
+
+        failures = [result for result in results if isinstance(result, BaseException)]
+        if failures:
+            # Stop all plugins, including the one whose start() failed: it may
+            # have allocated resources before raising.
+            await self._stop_plugins()
+            raise failures[0]
+
         self._started = True
         return self
 
     async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
         await self.stop()
 
-    async def stop(self) -> None:
-        """Stop every plugin even if one plugin fails during shutdown."""
-        if not self._started:
-            return
-        self._started = False
+    async def _stop_plugins(self) -> None:
+        """Stop every plugin, logging failures without skipping other plugins."""
         results = await asyncio.gather(
             *(plugin.stop() for plugin in reversed(self._plugins)),
             return_exceptions=True,
@@ -65,6 +70,13 @@ class DiscoveryEngine:
         for plugin, result in zip(reversed(self._plugins), results, strict=True):
             if isinstance(result, BaseException):
                 _LOGGER.warning("Failed to stop %s cleanly: %s", plugin.name, result)
+
+    async def stop(self) -> None:
+        """Stop every plugin even if one plugin fails during shutdown."""
+        if not self._started:
+            return
+        self._started = False
+        await self._stop_plugins()
 
     async def _pump(self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]) -> None:
         try:
