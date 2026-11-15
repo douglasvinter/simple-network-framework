@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
 
-from snf.models import Service
+from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class SSDPPlugin:
         self._running = True
         self._stop_event.clear()
 
-    async def discover(self) -> AsyncIterator[Service]:
+    async def discover(self) -> AsyncIterator[DiscoveryEvent]:
         if not self._running:
             raise RuntimeError("SSDPPlugin.start() must be called before discover()")
 
@@ -55,7 +55,7 @@ class SSDPPlugin:
                 self.search_target,
                 self.search_timeout,
             )
-            discovered: asyncio.Queue[Service] = asyncio.Queue()
+            discovered: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
 
             async def on_response(headers: object) -> None:
                 values = {str(key).lower(): value for key, value in dict(headers).items()}
@@ -66,27 +66,31 @@ class SSDPPlugin:
                 port = int(raw_port) if raw_port is not None else None
                 usn = str(values.get("usn", ""))
                 location = values.get("location")
-                await discovered.put(
-                    Service(
-                        protocol=self.name,
-                        name=usn or str(location or host),
-                        address=host,
-                        port=port,
-                        service_type=str(values.get("st", "")) or None,
-                        metadata=values,
-                    )
+                identifier = usn or str(location or host)
+                endpoint = Endpoint("ip", host, port)
+                service = Service(
+                    name=identifier,
+                    service_type=str(values.get("st", "")) or None,
+                    endpoints=(endpoint,),
+                    metadata=values,
                 )
+                device = Device(
+                    protocol=self.name,
+                    identifier=identifier,
+                    name=str(values.get("server") or values.get("st") or identifier),
+                    endpoints=(endpoint,),
+                    services=(service,),
+                    metadata={"location": location, "usn": usn},
+                )
+                await discovered.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
             await async_search(
                 async_callback=on_response,
                 timeout=self.search_timeout,
                 search_target=self.search_target,
             )
-            # async-upnp-client schedules async callbacks as tasks; give them a
-            # turn to enqueue their already-received responses before draining.
             await asyncio.sleep(0)
-            response_count = discovered.qsize()
-            _LOGGER.debug("SSDP search completed with %d response(s)", response_count)
+            _LOGGER.debug("SSDP search completed with %d response(s)", discovered.qsize())
             while not discovered.empty():
                 yield discovered.get_nowait()
 

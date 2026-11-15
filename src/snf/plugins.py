@@ -1,4 +1,4 @@
-"""Third-party protocol plugin contract and entry-point discovery."""
+"""Third-party discovery plugin contract and entry-point loading."""
 
 from __future__ import annotations
 
@@ -6,20 +6,20 @@ from collections.abc import AsyncIterator
 from importlib.metadata import EntryPoint, entry_points
 from typing import Protocol, runtime_checkable
 
-from snf.models import Service
+from snf.models import DiscoveryEvent
 
 
 @runtime_checkable
 class DiscoveryPlugin(Protocol):
-    """Contract implemented by every SNF protocol adapter."""
+    """Contract implemented by every SNF discovery adapter."""
 
     name: str
 
     async def start(self) -> None:
-        """Allocate resources and begin listening."""
+        """Allocate resources and begin observing the protocol."""
 
-    def discover(self) -> AsyncIterator[Service]:
-        """Yield service lifecycle events until stopped."""
+    def discover(self) -> AsyncIterator[DiscoveryEvent]:
+        """Yield device lifecycle events until stopped."""
 
     async def stop(self) -> None:
         """Stop discovery and release all owned resources."""

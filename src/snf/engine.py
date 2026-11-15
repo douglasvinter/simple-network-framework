@@ -1,4 +1,4 @@
-"""Concurrent orchestration for installed discovery plugins."""
+"""Concurrent orchestration for heterogeneous discovery plugins."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator, Iterable
 
-from snf.models import Service
+from snf.models import DiscoveryEvent
 from snf.plugins import DiscoveryPlugin
-from snf.registry import ServiceRegistry
+from snf.registry import DeviceRegistry
 
 _LOGGER = logging.getLogger(__name__)
 _DONE = object()
 
 
 class DiscoveryEngine:
-    """Run multiple protocol plugins behind one asynchronous interface."""
+    """Run protocol plugins concurrently and maintain a unified inventory."""
 
     def __init__(
         self,
@@ -30,8 +30,17 @@ class DiscoveryEngine:
             raise ValueError("Only one instance of each protocol plugin is allowed")
         if dedupe_cache_size < 1:
             raise ValueError("dedupe_cache_size must be at least 1")
-        self._dedupe_cache_size = dedupe_cache_size
+        self._registry = DeviceRegistry(max_entries=dedupe_cache_size)
         self._started = False
+
+    @property
+    def devices(self):
+        """Return the current in-memory device inventory as an immutable snapshot."""
+        return self._registry.snapshot()
+
+    def get_device(self, protocol: str, identifier: str):
+        """Look up a device by its protocol-scoped identifier."""
+        return self._registry.get(protocol, identifier)
 
     async def __aenter__(self) -> DiscoveryEngine:
         if self._started:
@@ -43,15 +52,11 @@ class DiscoveryEngine:
                 return_exceptions=True,
             )
         except BaseException:
-            # A cancelled or interrupted startup may have left plugins with
-            # partially allocated resources. Ask every plugin to clean up.
             await self._stop_plugins()
             raise
 
         failures = [result for result in results if isinstance(result, BaseException)]
         if failures:
-            # Stop all plugins, including the one whose start() failed: it may
-            # have allocated resources before raising.
             await self._stop_plugins()
             raise failures[0]
 
@@ -62,7 +67,6 @@ class DiscoveryEngine:
         await self.stop()
 
     async def _stop_plugins(self) -> None:
-        """Stop every plugin, logging failures without skipping other plugins."""
         results = await asyncio.gather(
             *(plugin.stop() for plugin in reversed(self._plugins)),
             return_exceptions=True,
@@ -78,19 +82,19 @@ class DiscoveryEngine:
         self._started = False
         await self._stop_plugins()
 
-    async def _pump(self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]) -> None:
+    async def _pump(
+        self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]
+    ) -> None:
         _LOGGER.debug("Discovery pump started for plugin %s", plugin.name)
         try:
-            async for service in plugin.discover():
+            async for event in plugin.discover():
                 _LOGGER.debug(
-                    "Plugin %s yielded %s service %s at %s:%s",
+                    "Plugin %s yielded %s device %s",
                     plugin.name,
-                    service.state.value,
-                    service.name,
-                    service.address,
-                    service.port or "-",
+                    event.state.value,
+                    event.device.identifier,
                 )
-                await queue.put(service)
+                await queue.put(event)
         except asyncio.CancelledError:
             _LOGGER.debug("Discovery pump cancelled for plugin %s", plugin.name)
             raise
@@ -100,19 +104,14 @@ class DiscoveryEngine:
             _LOGGER.debug("Discovery pump stopped for plugin %s", plugin.name)
             await queue.put(_DONE)
 
-    async def discover(self) -> AsyncIterator[Service]:
-        """Merge plugin streams and suppress duplicate service announcements."""
+    async def discover(self) -> AsyncIterator[DiscoveryEvent]:
+        """Merge plugin streams and update the in-memory device inventory."""
         if not self._started:
             raise RuntimeError("Use DiscoveryEngine as an async context manager first")
         if not self._plugins:
             return
 
         queue: asyncio.Queue[object] = asyncio.Queue()
-        registry = ServiceRegistry(max_entries=self._dedupe_cache_size)
-        _LOGGER.debug(
-            "Starting concurrent discovery for plugins: %s",
-            ", ".join(plugin.name for plugin in self._plugins),
-        )
         tasks = [
             asyncio.create_task(self._pump(plugin, queue), name=f"snf:{plugin.name}")
             for plugin in self._plugins
@@ -123,11 +122,11 @@ class DiscoveryEngine:
                 item = await queue.get()
                 if item is _DONE:
                     remaining -= 1
-                else:
-                    assert isinstance(item, Service)
-                    event = registry.process(item)
-                    if event is not None:
-                        yield event
+                    continue
+                assert isinstance(item, DiscoveryEvent)
+                normalized = self._registry.process(item)
+                if normalized is not None:
+                    yield normalized
         finally:
             for task in tasks:
                 if not task.done():

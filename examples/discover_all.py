@@ -1,4 +1,4 @@
-"""Discover UPnP, DNS-SD, and (when installed) SLP services."""
+"""Discover IP services and Bluetooth Low Energy peripherals."""
 
 import asyncio
 import logging
@@ -14,11 +14,12 @@ logging.getLogger("snf").setLevel(logging.DEBUG)
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def main() -> None:
     available = load_plugins()
     selected = [
         available[name]()
-        for name in ("ssdp", "mdns")
+        for name in ("ssdp", "mdns", "ble")
         if name in available
     ]
     if "slp" in available and shutil.which("slptool"):
@@ -27,11 +28,16 @@ async def main() -> None:
     _LOGGER.debug("Selected discovery plugins: %s", [plugin.name for plugin in selected])
 
     async with DiscoveryEngine(selected) as discovery:
-        async for service in discovery.discover():
+        async for event in discovery.discover():
+            device = event.device
+            endpoints = ", ".join(
+                f"{endpoint.transport}://{endpoint.address}"
+                + (f":{endpoint.port}" if endpoint.port is not None else "")
+                for endpoint in device.endpoints
+            )
             print(
-                f"[{service.protocol}] {service.name} "
-                f"{service.address}:{service.port or '-'} "
-                f"({service.service_type or 'unknown type'})"
+                f"[{event.state.value}] [{device.protocol}] {device.name} "
+                f"({device.identifier}) {endpoints}"
             )
 
 

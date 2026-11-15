@@ -8,50 +8,26 @@ from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any
 
-from snf.models import Service, ServiceState
+from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 _LOGGER = logging.getLogger(__name__)
 
-ALL_MDSNS_SERVICE_TYPES = [
-  "_airplay._tcp.local.",
-  "_raop._tcp.local.",
-  "_googlecast._tcp.local.",
-  "_spotify-connect._tcp.local.",
-  "_sonos._tcp.local.",
-  "_mediaremotetv._tcp.local.",
-  "_daap._tcp.local.",
-  "_dpap._tcp.local.",
-  "_roon._tcp.local.",
-  "_plexmediasvr._tcp.local.",
-  "_hap._tcp.local.",
-  "_homekit._tcp.local.",
-  "_matter._tcp.local.",
-  "_matterc._udp.local.",
-  "_hue._tcp.local.",
-  "_esphomelib._tcp.local.",
-  "_mqtt._tcp.local.",
-  "_home-assistant._tcp.local.",
-  "_wled._tcp.local.",
-  "_shelly._tcp.local.",
-  "_ipp._tcp.local.",
-  "_ipps._tcp.local.",
-  "_printer._tcp.local.",
-  "_pdl-datastream._tcp.local.",
-  "_scanner._tcp.local.",
-  "_uscan._tcp.local.",
-  "_uscans._tcp.local.",
-  "_smb._tcp.local.",
-  "_afpovertcp._tcp.local.",
-  "_nfs._tcp.local.",
-  "_sftp-ssh._tcp.local.",
-  "_ssh._tcp.local.",
-  "_rfb._tcp.local.",
-  "_http._tcp.local.",
-  "_https._tcp.local.",
-  "_workstation._tcp.local.",
-  "_device-info._tcp.local.",
-  "_occam._udp.local."
+DEFAULT_SERVICE_TYPES = [
+    "_airplay._tcp.local.", "_raop._tcp.local.", "_googlecast._tcp.local.",
+    "_spotify-connect._tcp.local.", "_sonos._tcp.local.", "_mediaremotetv._tcp.local.",
+    "_daap._tcp.local.", "_dpap._tcp.local.", "_roon._tcp.local.",
+    "_plexmediasvr._tcp.local.", "_hap._tcp.local.", "_homekit._tcp.local.",
+    "_matter._tcp.local.", "_matterc._udp.local.", "_hue._tcp.local.",
+    "_esphomelib._tcp.local.", "_mqtt._tcp.local.", "_home-assistant._tcp.local.",
+    "_wled._tcp.local.", "_shelly._tcp.local.", "_ipp._tcp.local.",
+    "_ipps._tcp.local.", "_printer._tcp.local.", "_pdl-datastream._tcp.local.",
+    "_scanner._tcp.local.", "_uscan._tcp.local.", "_uscans._tcp.local.",
+    "_smb._tcp.local.", "_afpovertcp._tcp.local.", "_nfs._tcp.local.",
+    "_sftp-ssh._tcp.local.", "_ssh._tcp.local.", "_rfb._tcp.local.",
+    "_http._tcp.local.", "_https._tcp.local.", "_workstation._tcp.local.",
+    "_device-info._tcp.local.", "_occam._udp.local.",
 ]
+
 
 class MDNSPlugin:
     """Browse and resolve DNS-SD service instances."""
@@ -75,14 +51,18 @@ class MDNSPlugin:
         self.resolve_timeout = resolve_timeout
         self.interfaces = interfaces
         self.type_discovery_timeout = type_discovery_timeout
-        self._events: asyncio.Queue[Service] = asyncio.Queue()
+        self._events: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
         self._zeroconf: Any = None
         self._browsers: list[Any] = []
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def start(self) -> None:
         from zeroconf import InterfaceChoice
-        from zeroconf.asyncio import AsyncServiceBrowser, AsyncZeroconfServiceTypes, AsyncZeroconf
+        from zeroconf.asyncio import (
+            AsyncServiceBrowser,
+            AsyncZeroconf,
+            AsyncZeroconfServiceTypes,
+        )
 
         self._loop = asyncio.get_running_loop()
         interfaces = self.interfaces if self.interfaces is not None else InterfaceChoice.All
@@ -91,13 +71,11 @@ class MDNSPlugin:
         if types is None:
             types = list(
                 await AsyncZeroconfServiceTypes.async_find(
-                    aiozc=self._zeroconf,
-                    timeout=self.type_discovery_timeout,
+                    aiozc=self._zeroconf, timeout=self.type_discovery_timeout
                 )
             )
         _LOGGER.debug("Discovered %d mDNS service types: %s", len(types), types)
         for service_type in types:
-            _LOGGER.debug("Starting mDNS browser for %s", service_type)
             self._browsers.append(
                 AsyncServiceBrowser(
                     self._zeroconf.zeroconf,
@@ -109,28 +87,17 @@ class MDNSPlugin:
     def _on_service_state_change(
         self, zeroconf: Any, service_type: str, name: str, state_change: Any
     ) -> None:
-        _LOGGER.debug(
-            "mDNS browser reported %s for %s (%s)",
-            state_change,
-            name,
-            service_type,
-        )
+        _LOGGER.debug("mDNS reported %s for %s (%s)", state_change, name, service_type)
         if self._loop is not None and not self._loop.is_closed():
             self._loop.create_task(self._resolve(service_type, name, state_change))
 
     async def _resolve(self, service_type: str, name: str, state_change: Any) -> None:
         from zeroconf import ServiceStateChange
 
+        identifier = f"{service_type}|{name}"
         if state_change is ServiceStateChange.Removed:
-            await self._events.put(
-                Service(
-                    protocol=self.name,
-                    name=name,
-                    address="",
-                    service_type=service_type,
-                    state=ServiceState.REMOVED,
-                )
-            )
+            device = Device(self.name, identifier, name)
+            await self._events.put(DiscoveryEvent(DiscoveryState.REMOVED, device))
             return
 
         info = await self._zeroconf.async_get_service_info(
@@ -151,27 +118,24 @@ class MDNSPlugin:
             )
             for key, value in info.properties.items()
         }
-        await self._events.put(
-            Service(
-                protocol=self.name,
-                name=name,
-                address=addresses[0],
-                port=info.port,
-                service_type=service_type,
-                state=(
-                    ServiceState.UPDATED
-                    if state_change is ServiceStateChange.Updated
-                    else ServiceState.ADDED
-                ),
-                metadata={
-                    "server": info.server,
-                    "addresses": addresses,
-                    "properties": properties,
-                },
-            )
+        endpoints = tuple(Endpoint("ip", address, info.port) for address in addresses)
+        service = Service(
+            name=name,
+            service_type=service_type,
+            endpoints=endpoints,
+            metadata={"server": info.server, "properties": properties},
         )
+        device = Device(
+            protocol=self.name,
+            identifier=identifier,
+            name=name,
+            endpoints=endpoints,
+            services=(service,),
+            metadata={"server": info.server, "properties": properties},
+        )
+        await self._events.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
-    async def discover(self) -> AsyncIterator[Service]:
+    async def discover(self) -> AsyncIterator[DiscoveryEvent]:
         if self._zeroconf is None:
             raise RuntimeError("MDNSPlugin.start() must be called before discover()")
         while True:
