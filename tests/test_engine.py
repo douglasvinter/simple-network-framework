@@ -19,7 +19,7 @@ class FakePlugin:
     def __init__(self, events=None):
         self.started = False
         self.stopped = False
-        self.events = events or [
+        self.events = events if events is not None else [
             DiscoveryEvent(
                 DiscoveryState.ADDED,
                 Device(
