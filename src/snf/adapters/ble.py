@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
@@ -40,7 +41,6 @@ class BLEPlugin:
         self.rssi_update_threshold = rssi_update_threshold
         self._scanner: Any = None
         self._events: asyncio.Queue[DiscoveryEvent | None] = asyncio.Queue()
-        self._stop_event = asyncio.Event()
         self._last_seen: dict[str, float] = {}
         self._last_emitted: dict[str, Device] = {}
         self._expiry_task: asyncio.Task[None] | None = None
@@ -117,7 +117,7 @@ class BLEPlugin:
         from bleak import BleakScanner
 
         self._running = True
-        self._stop_event.clear()
+        self._events = asyncio.Queue()
         self._last_seen.clear()
         self._last_emitted.clear()
         self._scanner = BleakScanner(
@@ -129,6 +129,8 @@ class BLEPlugin:
             await self._scanner.start()
         except BaseException:
             self._running = False
+            with contextlib.suppress(Exception):
+                await self._scanner.stop()
             self._scanner = None
             raise
         self._expiry_task = asyncio.create_task(
@@ -166,7 +168,6 @@ class BLEPlugin:
 
     async def stop(self) -> None:
         self._running = False
-        self._stop_event.set()
         self._events.put_nowait(None)
         if self._expiry_task is not None:
             self._expiry_task.cancel()
