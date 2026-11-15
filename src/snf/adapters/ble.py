@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
 
@@ -33,7 +34,7 @@ class BLEPlugin:
         self.service_uuids = service_uuids
         self.scanning_mode = scanning_mode
         self.device_timeout = device_timeout
-        self._scanner = None
+        self._scanner: Any = None
         self._events: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
         self._last_seen: dict[str, float] = {}
         self._expiry_task: asyncio.Task[None] | None = None
