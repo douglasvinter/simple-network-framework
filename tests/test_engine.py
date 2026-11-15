@@ -68,6 +68,8 @@ async def test_engine_starts_plugins_concurrently():
 @pytest.mark.asyncio
 async def test_engine_cleans_up_all_plugins_when_startup_fails():
     class FailingPlugin(FakePlugin):
+        name = "failing"
+
         async def start(self):
             # Simulate allocating a resource before startup fails.
             self.started = True
