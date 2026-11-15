@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 from collections.abc import AsyncIterator
+from typing import Any
 from importlib.util import find_spec
 
 from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
