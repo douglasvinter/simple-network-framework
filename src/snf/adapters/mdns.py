@@ -67,6 +67,7 @@ class MDNSPlugin:
             AsyncZeroconfServiceTypes,
         )
 
+        self._events = asyncio.Queue()
         self._loop = asyncio.get_running_loop()
         interfaces = self.interfaces if self.interfaces is not None else InterfaceChoice.All
         self._zeroconf = AsyncZeroconf(interfaces=interfaces)
