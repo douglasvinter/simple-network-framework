@@ -19,9 +19,18 @@ async def main() -> None:
     available = load_plugins()
     selected = [
         available[name]()
-        for name in ("ssdp", "mdns", "ble")
+        for name in ("ssdp", "mdns")
         if name in available
     ]
+
+    if "ble" in available:
+        selected.append(available["ble"]())
+    else:
+        _LOGGER.warning(
+            "BLE plugin is not registered. Reinstall SNF with "
+            "'python -m pip install -e ".[ble]"' to refresh entry points "
+            "and install the Bleak backend."
+        )
     if "slp" in available and shutil.which("slptool"):
         selected.append(available["slp"]())
 
