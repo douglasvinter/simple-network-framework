@@ -81,8 +81,10 @@ advertised service UUIDs, manufacturer data, and service data. BLE discovery doe
 not establish a connection or pair with a peripheral.
 
 BLE devices are considered removed after `device_timeout` seconds without a
-received advertisement (15 seconds by default). This is an observation timeout,
-not proof that the physical device is powered off or out of range.
+received advertisement (15 seconds by default). RSSI-only updates are emitted
+only when the signal changes by at least 5 dBm by default, avoiding a noisy event
+stream. This is an observation timeout, not proof that the physical device is
+powered off or out of range.
 
 ## Event de-duplication and inventory
 
