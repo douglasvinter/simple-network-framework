@@ -22,3 +22,36 @@ def test_ble_advertisement_is_normalized_without_connecting():
     assert result.metadata["rssi"] == -61
     assert result.metadata["manufacturer_data"] == {"76": "0102"}
     assert result.services[0].service_type == "bluetooth-le-advertised-service"
+
+
+import asyncio
+
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_ble_suppresses_small_rssi_fluctuations():
+    plugin = BLEPlugin.__new__(BLEPlugin)
+    plugin._running = True
+    plugin._events = asyncio.Queue()
+    plugin._last_seen = {}
+    plugin._last_emitted = {}
+    plugin.rssi_update_threshold = 5
+
+    device = SimpleNamespace(address="AA:BB:CC:DD:EE:FF", name="Sensor")
+    advertisement = SimpleNamespace(
+        local_name="Room Sensor",
+        rssi=-60,
+        tx_power=4,
+        service_uuids=["180f"],
+        manufacturer_data={},
+        service_data={},
+    )
+    plugin._on_advertisement(device, advertisement)
+    advertisement.rssi = -62
+    plugin._on_advertisement(device, advertisement)
+    assert plugin._events.qsize() == 1
+
+    advertisement.rssi = -66
+    plugin._on_advertisement(device, advertisement)
+    assert plugin._events.qsize() == 2
