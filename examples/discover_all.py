@@ -1,9 +1,18 @@
 """Discover UPnP, DNS-SD, and (when installed) SLP services."""
 
 import asyncio
+import logging
 import shutil
 
 from snf import DiscoveryEngine, load_plugins
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logging.getLogger("snf").setLevel(logging.DEBUG)
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def main() -> None:
@@ -15,6 +24,8 @@ async def main() -> None:
     ]
     if "slp" in available and shutil.which("slptool"):
         selected.append(available["slp"]())
+
+    _LOGGER.debug("Selected discovery plugins: %s", [plugin.name for plugin in selected])
 
     async with DiscoveryEngine(selected) as discovery:
         async for service in discovery.discover():
