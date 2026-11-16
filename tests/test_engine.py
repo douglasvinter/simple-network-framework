@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from snf.engine import DiscoveryEngine
+from snf.storage import InMemoryStorage
 from snf.models import (
     Device,
     DiscoveryEvent,
@@ -45,7 +46,7 @@ class FakePlugin:
 @pytest.mark.asyncio
 async def test_engine_lifecycle_and_discovery():
     plugin = FakePlugin()
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         assert plugin.started
         results = [event async for event in engine.discover()]
         assert len(results) == 1
@@ -74,7 +75,7 @@ async def test_engine_starts_plugins_concurrently():
     first = CoordinatedPlugin("first", first_started, second_started)
     second = CoordinatedPlugin("second", second_started, first_started)
 
-    async with DiscoveryEngine([first, second]):
+    async with DiscoveryEngine([first, second], storage=InMemoryStorage()):
         assert first.started
         assert second.started
 
@@ -95,7 +96,7 @@ async def test_engine_cleans_up_all_plugins_when_startup_fails():
     failing = FailingPlugin()
 
     with pytest.raises(RuntimeError, match="startup failed"):
-        async with DiscoveryEngine([healthy, failing], strict=True):
+        async with DiscoveryEngine([healthy, failing], storage=InMemoryStorage(), strict=True):
             pytest.fail("The context manager must not be entered")
 
     assert healthy.started
@@ -106,7 +107,7 @@ async def test_engine_cleans_up_all_plugins_when_startup_fails():
 
 @pytest.mark.asyncio
 async def test_engine_requires_context_manager():
-    engine = DiscoveryEngine([])
+    engine = DiscoveryEngine([], storage=InMemoryStorage())
     with pytest.raises(RuntimeError):
         _ = [event async for event in engine.discover()]
 
@@ -123,7 +124,7 @@ async def test_engine_suppresses_duplicate_announcements_and_updates_inventory()
         DiscoveryEvent(DiscoveryState.ADDED, device),
         DiscoveryEvent(DiscoveryState.ADDED, device),
     ])
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         events = [event async for event in engine.discover()]
         assert engine.get_device("ssdp", "uuid:device-1") == device
     assert len(events) == 1
@@ -142,7 +143,7 @@ async def test_engine_emits_update_when_device_changes():
         DiscoveryEvent(DiscoveryState.ADDED, initial),
         DiscoveryEvent(DiscoveryState.ADDED, changed),
     ])
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         events = [event async for event in engine.discover()]
     assert [event.state for event in events] == [
         DiscoveryState.ADDED, DiscoveryState.UPDATED
@@ -187,7 +188,7 @@ async def test_engine_skips_failed_start_and_keeps_healthy_plugin(caplog):
     healthy = FakePlugin()
     failing = FailingPlugin()
     with caplog.at_level("ERROR", logger="snf.engine"):
-        async with DiscoveryEngine([failing, healthy]) as engine:
+        async with DiscoveryEngine([failing, healthy], storage=InMemoryStorage()) as engine:
             events = [event async for event in engine.discover()]
 
     assert len(events) == 1
@@ -203,7 +204,7 @@ async def test_engine_with_all_failed_plugins_returns_empty_stream():
             raise RuntimeError("cannot start")
 
     failing = FailingPlugin()
-    async with DiscoveryEngine([failing]) as engine:
+    async with DiscoveryEngine([failing], storage=InMemoryStorage()) as engine:
         assert [event async for event in engine.discover()] == []
     assert failing.stopped
 
@@ -231,7 +232,7 @@ async def test_engine_snapshot_filters_protocol_and_preserves_devices_property()
         DiscoveryEvent(DiscoveryState.ADDED, ssdp),
     ])
 
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         _ = [event async for event in engine.discover()]
         assert engine.snapshot() == engine.devices == (mdns, ssdp)
         assert engine.snapshot(protocol="mdns") == (mdns,)
