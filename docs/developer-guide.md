@@ -32,17 +32,20 @@ python -m pip install -e '.[all,dev]'
 SNF uses Python package entry points in the `snf.protocols` group.
 
 ```python
+import logging
+
 from snf import load_plugins
 
+logger = logging.getLogger(__name__)
 available = load_plugins()
 
 for name, plugin_class in available.items():
-    print(name, plugin_class)
+    logger.info("Loaded plugin %s: %s", name, plugin_class)
 ```
 
 The returned dictionary maps the entry-point name to the plugin class. Loading the entry point imports the class, but does not instantiate or start it.
 
-A plugin may be absent because its distribution is not installed or because it has not registered the expected entry point. Optional backend packages must also be installed before the corresponding adapter can be instantiated.
+A plugin may be absent because its distribution is not installed or because it has not registered the expected entry point. If importing a registered plugin fails (including a missing module-level dependency), the loader logs the exception and continues loading other plugins. Optional backend packages must also be installed before the corresponding adapter can be instantiated.
 
 ## 3. Run discovery
 
@@ -57,23 +60,27 @@ The common application flow is:
 
 ```python
 import asyncio
+import logging
 
 from snf import DiscoveryEngine, load_plugins
+
+logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
     available = load_plugins()
-
-    selected = [
-        available[name]()
-        for name in ("ssdp", "mdns", "ble")
-        if name in available
-    ]
+    selected = []
+    for name, plugin_class in available.items():
+        try:
+            selected.append(plugin_class())
+        except Exception:
+            logger.exception("Failed to initialize plugin %r", name)
 
     async with DiscoveryEngine(selected) as engine:
         async for event in engine.discover():
             device = event.device
-            print(
+            logger.info(
+                "%s %s %s %s %s",
                 event.state.value,
                 device.protocol,
                 device.name,
@@ -83,6 +90,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
 ```
 
@@ -99,12 +107,11 @@ async with DiscoveryEngine(selected) as engine:
     async for event in engine.discover():
         device = event.device
 
-        if event.state.value == "added":
-            print("New observation:", device.name)
-        elif event.state.value == "updated":
-            print("Changed observation:", device.name)
-        elif event.state.value == "removed":
-            print("Observation removed:", device.name)
+        logger.info(
+            "%s observation: %s",
+            event.state.value,
+            device.name,
+        )
 
         # Current inventory snapshot, not a historical event list.
         current_devices = engine.devices
@@ -171,7 +178,7 @@ ble = BLEPlugin(
 slp = SLPPlugin(interval=60.0)
 ```
 
-Do not instantiate an adapter if its optional backend is not installed. SSDP, mDNS, and BLE adapters check for their Python backend and raise an installation hint. SLP checks for the external `slptool` executable.
+Adapters validate their optional backends during initialization and raise an actionable installation error when a dependency is missing. Applications that initialize several optional plugins should catch and log each initialization failure independently, so one unavailable backend does not prevent other plugins from running.
 
 ### What BLE discovery provides
 
