@@ -241,7 +241,7 @@ engine.get_device(protocol, identifier)
 
 When the maximum is exceeded, the oldest registry entry is removed to keep the inventory bounded. This capacity eviction currently does not emit a lifecycle event.
 
-The live registry is process-local. In addition, the engine requires an injected `InventoryStorage` driver and awaits its `upsert` for normalized ADDED/UPDATED observations before yielding events. `InMemoryStorage` is the bundled reference driver and does not survive process restarts; custom drivers may preserve records. REMOVED does not delete saved records. Read remembered records with `await engine.saved_devices(protocol=None)`; saved devices are not automatically loaded into the live registry.
+The live registry is process-local. The engine also requires an injected `InventoryStorage` driver; it awaits `upsert(device)` for normalized `ADDED`/`UPDATED` observations before yielding events. Duplicate observations do not reach storage. A `REMOVED` event removes the live record but deliberately retains the saved record. Read historical records with `await engine.saved_devices(protocol=None)`; they are not preloaded as live devices. `InMemoryStorage` persists only for the lifetime of its instance, whereas a custom driver may persist across restarts. Write failures are logged by default and propagated when `strict=True`. The caller owns any external storage connection lifecycle. See [Developer Guide — Inventory storage](developer-guide.md#10-inventory-storage-and-application-boundaries) for the contract and implementation examples.
 
 ## 8. How the consumer receives an event
 
