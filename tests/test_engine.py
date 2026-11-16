@@ -206,3 +206,34 @@ async def test_engine_with_all_failed_plugins_returns_empty_stream():
     async with DiscoveryEngine([failing]) as engine:
         assert [event async for event in engine.discover()] == []
     assert failing.stopped
+
+
+def test_registry_snapshot_filters_protocol_without_changing_inventory():
+    registry = DeviceRegistry()
+    mdns = Device("mdns", "one", "Printer")
+    ssdp = Device("ssdp", "two", "TV")
+    registry.process(DiscoveryEvent(DiscoveryState.ADDED, mdns))
+    registry.process(DiscoveryEvent(DiscoveryState.ADDED, ssdp))
+
+    assert registry.snapshot() == (mdns, ssdp)
+    assert registry.snapshot(protocol="mdns") == (mdns,)
+    assert registry.snapshot(protocol="ssdp") == (ssdp,)
+    assert registry.snapshot(protocol="ble") == ()
+    assert registry.snapshot() == (mdns, ssdp)
+
+
+@pytest.mark.asyncio
+async def test_engine_snapshot_filters_protocol_and_preserves_devices_property():
+    mdns = Device("mdns", "one", "Printer")
+    ssdp = Device("ssdp", "two", "TV")
+    plugin = FakePlugin([
+        DiscoveryEvent(DiscoveryState.ADDED, mdns),
+        DiscoveryEvent(DiscoveryState.ADDED, ssdp),
+    ])
+
+    async with DiscoveryEngine([plugin]) as engine:
+        _ = [event async for event in engine.discover()]
+        assert engine.snapshot() == engine.devices == (mdns, ssdp)
+        assert engine.snapshot(protocol="mdns") == (mdns,)
+        assert engine.snapshot(protocol="ssdp") == (ssdp,)
+        assert engine.snapshot(protocol="slp") == ()
