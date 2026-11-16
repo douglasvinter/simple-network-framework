@@ -76,7 +76,9 @@ class DiscoveryEngine:
                 try:
                     await plugin.stop()
                 except Exception:
-                    _LOGGER.exception("Failed to clean up plugin %s after startup failure", plugin.name)
+                    _LOGGER.exception(
+                        "Failed to clean up plugin %s after startup failure", plugin.name
+                    )
             else:
                 active.append(plugin)
 
