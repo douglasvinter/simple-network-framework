@@ -186,20 +186,14 @@ python examples/discover_all.py
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, load_plugins
+from snf import DiscoveryEngine, create_plugins
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    available = load_plugins()
-    selected = []
-    for plugin_name, plugin_type in available.items():
-        try:
-            selected.append(plugin_type())
-        except Exception:
-            logger.exception("Failed to initialize plugin %r", plugin_name)
+    selected = create_plugins()
 
     async with DiscoveryEngine(selected) as discovery:
         async for event in discovery.discover():
@@ -216,7 +210,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-The engine starts plugins concurrently and merges their event streams. A consumer
+SNF logs and skips plugins that fail construction or startup by default. Use\n`create_plugins(strict=True)` to fail on construction, and\n`DiscoveryEngine(selected, strict=True)` to fail on startup.\n\nThe engine starts plugins concurrently and merges their event streams. A consumer
 can inspect the current immutable inventory through `engine.devices`, or retrieve
 a protocol-scoped record with `engine.get_device(protocol, identifier)`.
 
