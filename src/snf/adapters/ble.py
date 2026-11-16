@@ -49,7 +49,7 @@ class BLEPlugin:
     @staticmethod
     def _to_device(device: object, advertisement_data: object) -> Device:
         """Normalize Bleak's public BLEDevice and AdvertisementData objects."""
-        address = str(getattr(device, "address"))
+        address = str(device.address)
         advertised_name = getattr(advertisement_data, "local_name", None)
         name = advertised_name or getattr(device, "name", None) or address
         rssi = getattr(advertisement_data, "rssi", None)
