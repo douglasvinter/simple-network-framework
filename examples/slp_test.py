@@ -6,7 +6,7 @@ import logging
 from snf import DiscoveryEngine
 from snf.adapters.slp import SLPPlugin
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("examples.slp")
 
 
 async def main() -> None:
