@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, create_plugins, InMemoryStorage
+from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
 logging.basicConfig(
     level=logging.INFO,
