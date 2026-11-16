@@ -67,3 +67,20 @@ def load_plugins() -> dict[str, type[DiscoveryPlugin]]:
         _LOGGER.debug("Loaded SNF protocol plugin %r", entry_point.name)
 
     return loaded
+
+
+def create_plugins(*, strict: bool = False) -> list[DiscoveryPlugin]:
+    """Instantiate registered plugins, isolating failures unless strict.
+
+    Use load_plugins() when plugin classes or custom constructor arguments
+    are needed instead of default plugin instances.
+    """
+    instances: list[DiscoveryPlugin] = []
+    for name, plugin_type in load_plugins().items():
+        try:
+            instances.append(plugin_type())
+        except Exception:
+            _LOGGER.exception("Failed to initialize SNF protocol plugin %r", name)
+            if strict:
+                raise
+    return instances
