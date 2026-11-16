@@ -374,6 +374,6 @@ Explicit inheritance is optional for third-party implementations because `Protoc
 
 The engine awaits `storage.upsert(device)` after normalized `ADDED` and `UPDATED` events, before yielding those events. Duplicate observations are suppressed and not written. A `REMOVED` event clears the live registry record but **does not delete** the remembered record. To forget a device explicitly, call `await storage.remove(protocol, identifier)`. Previously saved devices are not automatically considered online when an engine starts.
 
-Storage write errors are logged and discovery continues by default; `strict=True` propagates them. The caller owns initialization and cleanup of any resources used by its storage driver. Reusing one `InMemoryStorage` instance across engines retains its records while that instance exists, but not across process restarts.
+Storage exceptions propagate to the consumer; retry, buffering, and recovery policies belong to the storage driver. A failed write occurs after the live registry is updated, so replay of identical observations is not guaranteed. The caller owns initialization and cleanup of any resources used by its storage driver. Reusing one `InMemoryStorage` instance across engines retains its records while that instance exists, but not across process restarts.
 
 Pairing, device control, and automation remain outside SNF.
