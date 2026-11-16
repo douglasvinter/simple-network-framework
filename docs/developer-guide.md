@@ -259,7 +259,7 @@ An async-generator method declared with `async def` satisfies the iterator behav
 9. **Do not control devices from a discovery plugin.** Pairing, connecting, and invoking device operations belong to a separate consumer/control layer.
 10. **Treat network data as untrusted.** Discovery does not imply that an endpoint is reachable or safe to contact.
 
-## 7. Register and distribute the plugin
+For a complete, runnable adapter example—including a UDP listener, protocol parsing, event translation, packaging, and tests—see [Implementing a Custom Protocol Adapter](protocol-plugin-example.md).\n\n## 7. Register and distribute the plugin
 
 A third-party plugin should be packaged as a normal Python distribution and declare an entry point in its `pyproject.toml`.
 
