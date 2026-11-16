@@ -23,7 +23,7 @@ class InventoryStorage(Protocol):
     async def snapshot(self, *, protocol: str | None = None) -> tuple[Device, ...]: ...
 
 
-class InMemoryStorage:
+class InMemoryStorage(InventoryStorage):
     """Reference storage driver; records survive only as long as this instance."""
 
     def __init__(self) -> None:
