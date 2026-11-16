@@ -53,10 +53,10 @@ class SLPPlugin:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=self.command_timeout
             )
-        except TimeoutError:
+        except TimeoutError as exc:
             process.kill()
             await process.communicate()
-            raise TimeoutError(f"SLP command timed out: {' '.join(command)}")
+            raise TimeoutError(f"SLP command timed out: {' '.join(command)}") from exc
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
             raise RuntimeError(
