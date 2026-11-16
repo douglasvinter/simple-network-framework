@@ -184,21 +184,28 @@ python examples/discover_all.py
 
 ```python
 import asyncio
+import logging
+
 from snf import DiscoveryEngine, load_plugins
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
     available = load_plugins()
-    selected = [
-        available[name]()
-        for name in ("ssdp", "mdns", "ble")
-        if name in available
-    ]
+    selected = [plugin_type() for plugin_type in available.values()]
 
     async with DiscoveryEngine(selected) as discovery:
         async for event in discovery.discover():
             device = event.device
-            print(event.state, device.protocol, device.name, device.endpoints)
+            logger.info(
+                "%s %s %s %s",
+                event.state,
+                device.protocol,
+                device.name,
+                device.endpoints,
+            )
 
 
 asyncio.run(main())
