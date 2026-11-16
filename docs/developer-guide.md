@@ -62,7 +62,7 @@ The common application flow is:
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, create_plugins
+from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 async def main() -> None:
     selected = create_plugins()
 
-    async with DiscoveryEngine(selected) as engine:
+    async with DiscoveryEngine(selected, storage=InMemoryStorage()) as engine:
         async for event in engine.discover():
             device = event.device
             logger.info(
@@ -90,7 +90,7 @@ if __name__ == "__main__":
 
 The example above uses the adapters that are installed and registered. It does not automatically include SLP. To use SLP, install OpenSLP, ensure `slptool` is on `PATH`, and instantiate its registered plugin.
 
-By default, `create_plugins()` logs and skips plugins that fail construction, and `DiscoveryEngine` logs, cleans up, and skips plugins that fail `start()`. To require all selected plugins, use `create_plugins(strict=True)` and `DiscoveryEngine(selected, strict=True)`. Strict startup still cleans up successfully started plugins before raising.
+By default, `create_plugins()` logs and skips plugins that fail construction, and `DiscoveryEngine` logs, cleans up, and skips plugins that fail `start()`. To require all selected plugins, use `create_plugins(strict=True)` and `DiscoveryEngine(selected, storage=InMemoryStorage(), strict=True)`. Strict startup still cleans up successfully started plugins before raising.
 
 The async context starts the plugins and guarantees that the engine's shutdown path runs when the context exits. The discovery iterator is intended to run until the plugin streams finish or the consumer cancels/exits the context.
 
@@ -101,7 +101,7 @@ See [Logging](logging.md) for routing SNF logs into your application's handlers.
 An event has a `state` and a `device`.
 
 ```python
-async with DiscoveryEngine(selected) as engine:
+async with DiscoveryEngine(selected, storage=InMemoryStorage()) as engine:
     async for event in engine.discover():
         device = event.device
 
@@ -145,7 +145,7 @@ The registry can normalize an adapter's incoming event. For example, an adapter 
 The inventory is bounded to 4,096 records by default. You can override that limit:
 
 ```python
-engine = DiscoveryEngine(selected, dedupe_cache_size=8192)
+engine = DiscoveryEngine(selected, storage=InMemoryStorage(), dedupe_cache_size=8192)
 ```
 
 The parameter controls the registry's maximum number of entries. When the limit is exceeded, the oldest entry is evicted. Eviction currently does not produce a `REMOVED` event.
@@ -335,8 +335,8 @@ Use DEBUG logs to inspect plugin pumps and protocol activity. INFO is generally 
 
 ## 10. Persistence and application boundaries
 
-The inventory currently exists only in memory. Reading `engine.devices` returns a snapshot of current records; it is not a database query and it is not a historical log.
+`DiscoveryEngine` requires a keyword-only `storage` implementing `InventoryStorage`. The bundled `InMemoryStorage` is the reference driver; no database driver is bundled. `engine.snapshot()` and `engine.get_device()` read the live registry synchronously; `await engine.saved_devices(protocol=None)` reads remembered devices from storage. The engine awaits `storage.upsert(device)` for normalized ADDED/UPDATED observations. REMOVED clears the live registry but preserves remembered records; explicitly call `await storage.remove(protocol, identifier)` to forget them. Historical records are never assumed online after a restart.
 
-If an application needs persistence, it should consume lifecycle events and write to its own storage boundary. A future SNF persistence layer should be introduced separately from protocol adapters and should not make discovery depend on a particular database.
+A custom storage driver implements async `get`, `upsert`, `remove`, and `snapshot`. Inheriting from `InventoryStorage` is optional for third-party drivers (structural typing); `InMemoryStorage` inherits explicitly. Consumers manage custom storage resource lifecycles. See [Inventory Storage](inventory-storage.md) for examples and error handling.
 
 Likewise, applications that need pairing, device control, or automation should build those capabilities outside SNF.
