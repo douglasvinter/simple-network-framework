@@ -3,7 +3,6 @@ import asyncio
 import pytest
 
 from snf.engine import DiscoveryEngine
-from snf.storage import InMemoryStorage
 from snf.models import (
     Device,
     DiscoveryEvent,
@@ -12,6 +11,7 @@ from snf.models import (
     Service,
 )
 from snf.registry import DeviceRegistry
+from snf.storage import InMemoryStorage
 
 
 class FakePlugin:
