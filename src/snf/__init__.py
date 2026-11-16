@@ -2,9 +2,6 @@
 
 import logging
 
-# Library logging is configured by the consuming application.
-logging.getLogger(__name__).addHandler(logging.NullHandler())
-
 from snf.engine import DiscoveryEngine
 from snf.models import (
     Device,
@@ -15,6 +12,9 @@ from snf.models import (
 )
 from snf.plugins import DiscoveryPlugin, create_plugins, load_plugins
 from snf.registry import DeviceRegistry
+
+# Library logging is configured by the consuming application.
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "Device",
