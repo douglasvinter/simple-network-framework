@@ -43,7 +43,11 @@ class DiscoveryEngine:
     @property
     def devices(self) -> tuple[Device, ...]:
         """Return the current in-memory device inventory as an immutable snapshot."""
-        return self._registry.snapshot()
+        return self.snapshot()
+
+    def snapshot(self, *, protocol: str | None = None) -> tuple[Device, ...]:
+        """Return a point-in-time inventory snapshot, optionally by protocol."""
+        return self._registry.snapshot(protocol=protocol)
 
     def get_device(self, protocol: str, identifier: str) -> Device | None:
         """Look up a device by its protocol-scoped identifier."""
