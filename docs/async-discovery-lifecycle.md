@@ -15,43 +15,43 @@ The implementation described here corresponds to:
 A consumer creates plugin instances and enters the engine's asynchronous context. The engine starts the plugins concurrently. When the consumer begins iterating over `engine.discover()`, the engine creates one asynchronous task per plugin. Each task reads its plugin's async event stream and forwards events to a shared queue. The engine reads that queue, updates the in-memory registry, and yields normalized events to the consumer.
 
 ```text
-Application
-    |
-    | async with DiscoveryEngine(plugins, storage=InMemoryStorage())
-    v
-DiscoveryEngine.__aenter__()
-    |
-    | asyncio.gather(plugin.start() ...)
-    v
-All plugins started
-    |
-    | async for event in engine.discover()
-    v
-Create one asyncio task per plugin
-    |
-    +------------------+------------------+
-    |                  |                  |
-    v                  v                  v
- _pump(SSDP)        _pump(mDNS)         _pump(BLE)
-    |                  |                  |
-    v                  v                  v
- plugin.discover()  plugin.discover()  plugin.discover()
-    |                  |                  |
-    +------------------+------------------+
-                       |
-                       v
-                asyncio.Queue
-                       |
-                       v
-                DeviceRegistry.process()
-                       |
-             +---------+---------+
-             |                   |
-             v                   v
-      normalized event      inventory update
-             |
-             v
-       consumer receives event
+                                    Application
+                                         |
+          | async with DiscoveryEngine(plugins, storage=InMemoryStorage())
+                                         v
+                            DiscoveryEngine.__aenter__()
+                                         |
+                        | asyncio.gather(plugin.start() ...)
+                                         v
+                                All plugins started
+                                         |
+                       | async for event in engine.discover()
+                                         v
+                         Create one asyncio task per plugin
+                                         |
+          +--------------------+--------------------+--------------------+
+          |                    |                    |                    |
+         v                    v                    v                    v
+    _pump(SSDP)          _pump(mDNS)           _pump(BLE)           _pump(SLP)
+         |                    |                    |                    |
+         v                    v                    v                    v
+ plugin.discover()    plugin.discover()    plugin.discover()    plugin.discover()
+         |                    |                    |                    |
+          +--------------------+--------------------+--------------------+
+                                         |
+                                         v
+                                   asyncio.Queue
+                                         |
+                                         v
+                              DeviceRegistry.process()
+                                         |
+                               +----------+----------+
+                               |                     |
+                               v                     v
+                   normalized event             inventory update
+                               |
+                               v
+                              consumer receives event
 ```
 
 ## 2. Coroutines, tasks, and async iterators
