@@ -17,7 +17,7 @@ A consumer creates plugin instances and enters the engine's asynchronous context
 ```text
 Application
     |
-    | async with DiscoveryEngine(plugins)
+    | async with DiscoveryEngine(plugins, storage=InMemoryStorage())
     v
 DiscoveryEngine.__aenter__()
     |
@@ -125,7 +125,7 @@ Do not call `asyncio.run()` from inside an already-running event loop, such as i
 The engine is an asynchronous context manager:
 
 ```python
-async with DiscoveryEngine(plugins) as engine:
+async with DiscoveryEngine(plugins, storage=InMemoryStorage()) as engine:
     ...
 ```
 
@@ -136,8 +136,8 @@ The engine:
 1. Rejects a second concurrent start of the same engine instance.
 2. Calls every plugin's `start()`.
 3. Awaits them through `asyncio.gather(..., return_exceptions=True)`.
-4. If startup failures occurred, attempts to stop all configured plugins and raises the first failure.
-5. Marks itself as started only after all plugin starts succeed.
+4. On failure, logs and cleans up the failing plugin while allowing successful plugins to continue by default; `strict=True` instead stops all successfully started plugins and raises.
+5. Marks itself as started with the successfully started plugins.
 
 Using `gather()` means startup operations can overlap. For example, an mDNS adapter may initialize its browser while a BLE adapter starts scanning. The engine does not start one adapter and wait for its full discovery lifetime before starting the next.
 
@@ -241,7 +241,7 @@ engine.get_device(protocol, identifier)
 
 When the maximum is exceeded, the oldest registry entry is removed to keep the inventory bounded. This capacity eviction currently does not emit a lifecycle event.
 
-There is no database, file, or durable storage in the current implementation. The inventory exists only for the lifetime of the process/engine and is lost when the application exits.
+The live registry is process-local. The engine also requires an injected `InventoryStorage` driver; it awaits `upsert(device)` for normalized `ADDED`/`UPDATED` observations before yielding events. Duplicate observations do not reach storage. A `REMOVED` event removes the live record but deliberately retains the saved record. Read historical records with `await engine.saved_devices(protocol=None)`; they are not preloaded as live devices. `InMemoryStorage` persists only for the lifetime of its instance, whereas a custom driver may persist across restarts. Write exceptions propagate to the consumer. The storage driver owns retries and recovery; because the live registry has already been updated, identical observations may be suppressed after a failed write. The caller owns any external storage connection lifecycle. See [Developer Guide — Inventory storage](developer-guide.md#10-inventory-storage-and-application-boundaries) for the contract and implementation examples.
 
 ## 8. How the consumer receives an event
 
@@ -252,7 +252,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-async with DiscoveryEngine(plugins) as engine:
+async with DiscoveryEngine(plugins, storage=InMemoryStorage()) as engine:
     async for event in engine.discover():
         logger.info("Discovery event: %s %s", event.state, event.device)
         logger.debug("Current inventory: %s", engine.devices)
@@ -308,9 +308,9 @@ An mDNS service removal, a BLE advertisement timeout, and a missing SLP query re
 
 If SSDP and mDNS discover the same physical device, the registry keeps separate records because their protocol-scoped identities differ. Cross-protocol correlation belongs in a separate layer with stronger evidence.
 
-### Inventory is not persistent
+### Live inventory and remembered records are distinct
 
-The registry is process-local. Restarting the application starts with an empty inventory and discovery repopulates it.
+The live registry starts empty and discovery repopulates it. The mandatory storage driver can retain historical records independently, but SNF does not treat those records as online until rediscovered.
 
 ### The queue is not currently bounded
 
@@ -338,4 +338,4 @@ Useful log messages include:
 - `Discovery pump stopped ...`: the pump exited.
 
 A pump-start message does not prove that a device has been discovered. It only confirms that the engine is consuming that plugin's iterator. Some protocols are quiet until a device advertises or responds, and mDNS is event-driven rather than a repeated search loop.
-\n\n## Plugin startup failure policy\n\nBy default, `DiscoveryEngine(plugins)` logs and cleans up a plugin whose `start()` fails, while successfully started plugins continue discovery. Set `DiscoveryEngine(plugins, strict=True)` to fail startup and stop all successfully started plugins before propagating the error. Constructor failures are handled by `create_plugins()` (default: log and skip; `strict=True`: re-raise). When all plugins fail to start in non-strict mode, `discover()` finishes without yielding events.\n
+\n\n## Plugin startup failure policy\n\nBy default, `DiscoveryEngine(plugins, storage=InMemoryStorage())` logs and cleans up a plugin whose `start()` fails, while successfully started plugins continue discovery. Set `DiscoveryEngine(plugins, storage=InMemoryStorage(), strict=True)` to fail startup and stop all successfully started plugins before propagating the error. Constructor failures are handled by `create_plugins()` (default: log and skip; `strict=True`: re-raise). When all plugins fail to start in non-strict mode, `discover()` finishes without yielding events.\n

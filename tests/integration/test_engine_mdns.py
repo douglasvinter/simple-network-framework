@@ -7,7 +7,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from snf import DiscoveryEngine, DiscoveryState
+from snf import DiscoveryEngine, DiscoveryState, InMemoryStorage
 from snf.adapters.mdns import MDNSPlugin
 
 
@@ -75,7 +75,7 @@ async def test_real_mdns_adapter_and_engine_with_mocked_zeroconf(monkeypatch):
     plugin._browsers = []
     plugin._loop = None
 
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         browser = FakeAsyncServiceBrowser.instances[0]
         callback = browser.handlers[0]
         callback(

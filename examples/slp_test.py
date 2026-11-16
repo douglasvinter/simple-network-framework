@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from snf import DiscoveryEngine
+from snf import DiscoveryEngine, InMemoryStorage
 from snf.adapters.slp import SLPPlugin
 
 _LOGGER = logging.getLogger("examples.slp")
@@ -18,7 +18,7 @@ async def main() -> None:
         command_timeout=15.0,
     )
 
-    async with DiscoveryEngine([plugin]) as discovery:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
             device = event.device
             _LOGGER.info(

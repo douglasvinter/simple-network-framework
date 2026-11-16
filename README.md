@@ -186,7 +186,7 @@ python examples/discover_all.py
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, create_plugins
+from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -195,7 +195,7 @@ logger = logging.getLogger(__name__)
 async def main() -> None:
     selected = create_plugins()
 
-    async with DiscoveryEngine(selected) as discovery:
+    async with DiscoveryEngine(selected, storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
             device = event.device
             logger.info(
@@ -210,7 +210,13 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-SNF logs and skips plugins that fail construction or startup by default. Use\n`create_plugins(strict=True)` to fail on construction, and\n`DiscoveryEngine(selected, strict=True)` to fail on startup.\n\nThe engine starts plugins concurrently and merges their event streams. A consumer
+SNF logs and skips plugins that fail construction or startup by default. Use
+`create_plugins(strict=True)` to fail on construction, and
+`DiscoveryEngine(selected, storage=InMemoryStorage(), strict=True)` to fail on startup.
+
+The engine requires an injected storage driver. `InMemoryStorage` is bundled; applications can implement the `InventoryStorage` protocol for other storage backends. Storage exceptions propagate to the caller, and drivers own their retry/recovery policies. See the [Developer Guide](docs/developer-guide.md#10-inventory-storage-and-application-boundaries).
+
+The engine starts plugins concurrently and merges their event streams. A consumer
 can inspect the current immutable inventory through `engine.devices`, or retrieve
 a protocol-scoped record with `engine.get_device(protocol, identifier)`.
 

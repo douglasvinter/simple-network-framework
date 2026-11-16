@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Simple Network Framework (SNF) is an asynchronous Python framework for discovering devices and advertised services on local networks. It normalizes observations from different discovery protocols into a common domain model and maintains a bounded, in-memory device inventory.
+Simple Network Framework (SNF) is an asynchronous Python framework for discovering devices and advertised services on local networks. It normalizes observations from different discovery protocols into a common domain model and maintains a bounded live device inventory and writes observations to an injected storage driver.
 
 SNF is deliberately a discovery and inventory library. It is not a device-control or home-automation platform.
 
@@ -22,19 +22,20 @@ SNF is deliberately a discovery and inventory library. It is not a device-contro
 - Establishing general-purpose device sessions or managing connections.
 - Invoking device APIs, launching TV applications, or controlling appliances.
 - Automation rules, schedules, scenes, and workflows.
-- Database persistence and long-term history.
+- Bundled database drivers, schema management, and retention policies.
 - Automatic correlation of observations from different protocols into one physical device.
 
 These responsibilities can be implemented by a separate consumer such as `simple-home-automation`.
 
 ## 2. High-level architecture
 
-The framework is composed of four cooperating areas:
+The framework is composed of five cooperating areas:
 
 1. **Protocol adapters** observe their own protocols and emit normalized `DiscoveryEvent` objects.
 2. **DiscoveryEngine** starts adapters, runs their asynchronous event streams concurrently, and merges the streams.
 3. **DeviceRegistry** applies lifecycle semantics, suppresses duplicate observations, and maintains the current inventory.
-4. **Consumer application** receives normalized events and can query the engine's current inventory.
+4. **InventoryStorage** defines asynchronous key/value operations for remembered device records, with `InMemoryStorage` as the bundled reference implementation.
+5. **Consumer application** receives events and queries live or remembered records.
 
 ```text
                     Consumer application
@@ -54,7 +55,13 @@ The framework is composed of four cooperating areas:
                             |
                       DeviceRegistry
                             |
-                 bounded in-memory inventory
+                 bounded live in-memory inventory
+                            |
+                    ADDED / UPDATED
+                            v
+                    InventoryStorage
+                            |
+                  injected storage driver
 ```
 
 The engine does not need to understand SSDP, DNS-SD, SLP, or BLE. Each adapter owns protocol-specific behavior and translates its observations into the shared model.
@@ -132,7 +139,7 @@ This provides concurrent observation without requiring a separate thread per pro
 The engine is an asynchronous context manager so that callers have a clear resource lifecycle:
 
 ```python
-async with DiscoveryEngine(plugins) as engine:
+async with DiscoveryEngine(plugins, storage=InMemoryStorage()) as engine:
     async for event in engine.discover():
         ...
 ```
@@ -155,7 +162,7 @@ The `DeviceRegistry` in `src/snf/registry.py` is the current inventory implement
 
 When capacity is exceeded, the registry evicts the oldest entry. Eviction is a capacity-management behavior and does not currently emit a `REMOVED` event.
 
-**Decision:** persistence is intentionally deferred. The inventory is process-local and is lost when the application exits. A persistence layer should be designed after the domain model and lifecycle semantics have been exercised by real consumers.
+**Decision:** the storage contract is mandatory, but database implementations are intentionally deferred. The live registry is process-local; remembered records live in the caller-supplied storage driver. The reference `InMemoryStorage` is not durable.
 
 ## 8. Adapter responsibilities and current implementations
 
@@ -197,14 +204,14 @@ The engine currently does not expose a structured collection of runtime plugin f
 | Use asyncio and async iterators | Fits I/O-bound discovery and supports concurrent protocol streams. |
 | Keep protocol implementations in adapters | Core orchestration does not depend on each protocol's library or wire format. |
 | Load third-party adapters through entry points | Enables independent plugin distributions. |
-| Keep inventory in memory for now | Avoids prematurely choosing a persistence technology or freezing storage semantics. |
+| Require an injected storage contract | Support application-defined persistence without bundling a database or compromising fast live snapshots. |
 | Delegate protocol implementations to established libraries | Reduces custom protocol code and maintenance burden. |
 
 ## 11. Current limitations and future considerations
 
 The following are explicit limitations, not guarantees the current framework already solves:
 
-- No persistence or historical inventory.
+- No bundled database implementation; historical records are available through the injected storage driver.
 - No cross-protocol device correlation.
 - No structured runtime health API for failed plugin streams.
 - No universal expiry policy across all protocols.
@@ -214,3 +221,8 @@ The following are explicit limitations, not guarantees the current framework alr
 - Discovery results depend on network topology, multicast behavior, adapter support, operating-system permissions, and protocol-specific visibility.
 
 Future changes should preserve the separation between protocol adapters, orchestration, inventory, and consuming applications.
+
+
+## Injected inventory storage decision
+
+`DiscoveryEngine` requires `storage: InventoryStorage` as a keyword-only constructor argument. The live `DeviceRegistry` remains the source for synchronous snapshots, deduplication, and event normalization. Storage is a separate async key/value contract (`get`, `upsert`, `remove`, `snapshot`) keyed by `(protocol, identifier)`. Only normalized ADDED/UPDATED events are upserted; REMOVED does not erase remembered records. `await engine.saved_devices()` retrieves historical records without presenting them as currently online. Storage exceptions propagate directly. Drivers own retry and recovery policies; the registry may suppress identical observations after a failed write. The consumer owns storage resource lifecycle. `InMemoryStorage(InventoryStorage)` is the reference implementation, with no bundled database. See [Inventory Storage](developer-guide.md#10-inventory-storage-and-application-boundaries).

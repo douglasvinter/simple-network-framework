@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, create_plugins
+from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,7 +19,7 @@ async def main() -> None:
 
     _LOGGER.info("Starting discovery with plugins: %s", [p.name for p in selected])
 
-    async with DiscoveryEngine(selected) as discovery:
+    async with DiscoveryEngine(selected, storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
             device = event.device
             endpoints = ", ".join(

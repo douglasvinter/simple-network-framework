@@ -6,7 +6,7 @@ from types import ModuleType
 
 import pytest
 
-from snf import DiscoveryEngine, DiscoveryState
+from snf import DiscoveryEngine, DiscoveryState, InMemoryStorage
 from snf.adapters.ssdp import SSDPPlugin
 
 
@@ -44,7 +44,7 @@ async def test_real_ssdp_adapter_and_engine_with_mocked_network_boundary(monkeyp
     plugin._running = False
     plugin._stop_event = asyncio.Event()
 
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         events = [event async for event in engine.discover()]
         assert len(events) == 1
         event = events[0]

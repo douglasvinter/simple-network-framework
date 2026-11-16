@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from snf import DiscoveryEngine, DiscoveryState
+from snf import DiscoveryEngine, DiscoveryState, InMemoryStorage
 from snf.adapters.slp import SLPPlugin
 
 
@@ -43,7 +43,7 @@ async def test_real_slp_adapter_and_engine_with_mocked_subprocess(monkeypatch):
 
     plugin = SLPPlugin(interval=60, command_timeout=1)
 
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         stream = engine.discover()
         event = await asyncio.wait_for(anext(stream), timeout=1)
         await stream.aclose()

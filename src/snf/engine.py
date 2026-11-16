@@ -8,9 +8,10 @@ import logging
 from collections.abc import AsyncIterator, Iterable
 from typing import TYPE_CHECKING
 
-from snf.models import DiscoveryEvent
+from snf.models import DiscoveryEvent, DiscoveryState
 from snf.plugins import DiscoveryPlugin
 from snf.registry import DeviceRegistry
+from snf.storage import InventoryStorage
 
 if TYPE_CHECKING:
     from snf.models import Device
@@ -26,6 +27,7 @@ class DiscoveryEngine:
         self,
         plugins: Iterable[DiscoveryPlugin],
         *,
+        storage: InventoryStorage,
         dedupe_cache_size: int = 4096,
         strict: bool = False,
     ) -> None:
@@ -38,6 +40,7 @@ class DiscoveryEngine:
         if dedupe_cache_size < 1:
             raise ValueError("dedupe_cache_size must be at least 1")
         self._registry = DeviceRegistry(max_entries=dedupe_cache_size)
+        self.storage = storage
         self._started = False
 
     @property
@@ -52,6 +55,10 @@ class DiscoveryEngine:
     def get_device(self, protocol: str, identifier: str) -> Device | None:
         """Look up a device by its protocol-scoped identifier."""
         return self._registry.get(protocol, identifier)
+
+    async def saved_devices(self, *, protocol: str | None = None) -> tuple[Device, ...]:
+        """Read remembered devices from the configured storage backend."""
+        return await self.storage.snapshot(protocol=protocol)
 
     async def __aenter__(self) -> DiscoveryEngine:
         if self._started:
@@ -158,6 +165,8 @@ class DiscoveryEngine:
                 assert isinstance(item, DiscoveryEvent)
                 normalized = self._registry.process(item)
                 if normalized is not None:
+                    if normalized.state is not DiscoveryState.REMOVED:
+                        await self.storage.upsert(normalized.device)
                     yield normalized
         finally:
             for task in tasks:

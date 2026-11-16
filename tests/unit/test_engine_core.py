@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-from snf import Device, DiscoveryEngine, DiscoveryEvent, DiscoveryState
+from snf import Device, DiscoveryEngine, DiscoveryEvent, DiscoveryState, InMemoryStorage
 
 
 class QueuePlugin:
@@ -41,7 +41,7 @@ async def test_failing_plugin_does_not_interrupt_healthy_plugin(caplog):
     failing = FailingPlugin("failing")
 
     with caplog.at_level(logging.ERROR, logger="snf.engine"):
-        async with DiscoveryEngine([failing, healthy]) as engine:
+        async with DiscoveryEngine([failing, healthy], storage=InMemoryStorage()) as engine:
             received = [item async for item in engine.discover()]
 
     assert {item.device.identifier for item in received} == {
@@ -65,7 +65,7 @@ async def test_closing_consumer_cancels_plugin_streams_and_runs_generator_cleanu
                 cleaned_up.set()
 
     plugin = ContinuousPlugin("continuous")
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         stream = engine.discover()
         first = await asyncio.wait_for(anext(stream), timeout=1)
         assert first.device.identifier == "first"
@@ -87,7 +87,7 @@ async def test_removed_device_is_removed_from_inventory_and_can_reappear():
         ],
     )
 
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         received = [item async for item in engine.discover()]
         assert engine.get_device("test", "device-1") == device
 
@@ -109,7 +109,7 @@ async def test_plugin_shutdown_failure_does_not_prevent_other_shutdown(caplog):
     healthy = QueuePlugin("healthy")
 
     with caplog.at_level(logging.WARNING, logger="snf.engine"):
-        async with DiscoveryEngine([failing, healthy]):
+        async with DiscoveryEngine([failing, healthy], storage=InMemoryStorage()):
             pass
 
     assert failing.stopped and healthy.stopped

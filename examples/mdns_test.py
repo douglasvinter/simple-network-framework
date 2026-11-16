@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from snf import DiscoveryEngine
+from snf import DiscoveryEngine, InMemoryStorage
 from snf.adapters.mdns import DEFAULT_SERVICE_TYPES, MDNSPlugin
 
 _LOGGER = logging.getLogger("examples.mdns")
@@ -15,7 +15,7 @@ async def main() -> None:
         resolve_timeout=5000,
     )
 
-    async with DiscoveryEngine([plugin]) as discovery:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
             device = event.device
             _LOGGER.info(
