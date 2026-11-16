@@ -57,7 +57,10 @@ class SSDPPlugin:
             )
             discovered: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
 
-            async def on_response(headers: object) -> None:
+            async def on_response(
+                headers: object,
+                destination: asyncio.Queue[DiscoveryEvent] = discovered,
+            ) -> None:
                 values = {str(key).lower(): value for key, value in dict(headers).items()}
                 host = str(values.get("_host", ""))
                 if not host:
@@ -82,7 +85,7 @@ class SSDPPlugin:
                     services=(service,),
                     metadata={"location": location, "usn": usn},
                 )
-                await discovered.put(DiscoveryEvent(DiscoveryState.ADDED, device))
+                await destination.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
             await async_search(
                 async_callback=on_response,
