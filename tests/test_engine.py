@@ -173,3 +173,36 @@ def test_service_is_nested_in_device():
     service = Service("http", "_http._tcp.local.", (endpoint,))
     device = Device("mdns", "web-1", "Web server", (endpoint,), (service,))
     assert device.services[0].endpoints[0].port == 80
+
+
+@pytest.mark.asyncio
+async def test_engine_skips_failed_start_and_keeps_healthy_plugin(caplog):
+    class FailingPlugin(FakePlugin):
+        name = "failing"
+
+        async def start(self):
+            self.started = True
+            raise RuntimeError("cannot start")
+
+    healthy = FakePlugin()
+    failing = FailingPlugin()
+    with caplog.at_level("ERROR", logger="snf.engine"):
+        async with DiscoveryEngine([failing, healthy]) as engine:
+            events = [event async for event in engine.discover()]
+
+    assert len(events) == 1
+    assert events[0].device.name == "test"
+    assert healthy.stopped and failing.stopped
+    assert "Failed to start discovery plugin failing" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_engine_with_all_failed_plugins_returns_empty_stream():
+    class FailingPlugin(FakePlugin):
+        async def start(self):
+            raise RuntimeError("cannot start")
+
+    failing = FailingPlugin()
+    async with DiscoveryEngine([failing]) as engine:
+        assert [event async for event in engine.discover()] == []
+    assert failing.stopped
