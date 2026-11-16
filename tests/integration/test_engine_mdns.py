@@ -29,7 +29,6 @@ class FakeServiceInfo:
 class FakeAsyncZeroconf:
     def __init__(self, *, interfaces):
         self.zeroconf = self
-        self.closed = False
 
     async def async_get_service_info(self, service_type, name, *, timeout):
         assert service_type == "_http._tcp.local."
@@ -37,7 +36,7 @@ class FakeAsyncZeroconf:
         return FakeServiceInfo()
 
     async def async_close(self):
-        self.closed = True
+        pass
 
 
 class FakeAsyncServiceBrowser:
@@ -55,6 +54,7 @@ class FakeAsyncServiceBrowser:
 @pytest.mark.asyncio
 async def test_real_mdns_adapter_and_engine_with_mocked_zeroconf(monkeypatch):
     zeroconf_module = ModuleType("zeroconf")
+    zeroconf_module.__path__ = []
     zeroconf_module.InterfaceChoice = SimpleNamespace(All="all")
     zeroconf_module.ServiceStateChange = FakeServiceStateChange
     asyncio_module = ModuleType("zeroconf.asyncio")
