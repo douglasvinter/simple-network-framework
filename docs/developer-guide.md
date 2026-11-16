@@ -333,10 +333,47 @@ logging.getLogger("snf").setLevel(logging.DEBUG)
 
 Use DEBUG logs to inspect plugin pumps and protocol activity. INFO is generally more appropriate for normal application operation.
 
-## 10. Persistence and application boundaries
+## 10. Inventory storage and application boundaries
 
-`DiscoveryEngine` requires a keyword-only `storage` implementing `InventoryStorage`. The bundled `InMemoryStorage` is the reference driver; no database driver is bundled. `engine.snapshot()` and `engine.get_device()` read the live registry synchronously; `await engine.saved_devices(protocol=None)` reads remembered devices from storage. The engine awaits `storage.upsert(device)` for normalized ADDED/UPDATED observations. REMOVED clears the live registry but preserves remembered records; explicitly call `await storage.remove(protocol, identifier)` to forget them. Historical records are never assumed online after a restart.
+The `DiscoveryEngine` constructor requires a keyword-only `storage` argument. SNF supplies the `InMemoryStorage` reference driver but no database implementation.
 
-A custom storage driver implements async `get`, `upsert`, `remove`, and `snapshot`. Inheriting from `InventoryStorage` is optional for third-party drivers (structural typing); `InMemoryStorage` inherits explicitly. Consumers manage custom storage resource lifecycles. See [Inventory Storage](inventory-storage.md) for examples and error handling.
+```python
+from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
-Likewise, applications that need pairing, device control, or automation should build those capabilities outside SNF.
+storage = InMemoryStorage()
+
+async with DiscoveryEngine(create_plugins(), storage=storage) as engine:
+    async for event in engine.discover():
+        live = engine.snapshot(protocol="mdns")
+        remembered = await engine.saved_devices(protocol="mdns")
+```
+
+### Storage contract and custom implementations
+
+`InventoryStorage` is a structural `Protocol` with asynchronous key/value operations. Records are keyed by `(protocol, identifier)` to avoid collisions across discovery protocols:
+
+```python
+from snf import Device, InventoryStorage
+
+class MyStorage(InventoryStorage):
+    async def get(self, protocol: str, identifier: str) -> Device | None: ...
+    async def upsert(self, device: Device) -> None: ...
+    async def remove(self, protocol: str, identifier: str) -> None: ...
+    async def snapshot(
+        self, *, protocol: str | None = None
+    ) -> tuple[Device, ...]: ...
+
+storage: InventoryStorage = MyStorage()
+```
+
+Explicit inheritance is optional for third-party implementations because `Protocol` supports structural typing. The bundled `InMemoryStorage` explicitly inherits `InventoryStorage`. A custom driver may implement its own persistence mechanism without changing SNF.
+
+### Live versus remembered devices
+
+`engine.devices`, `engine.snapshot()`, and `engine.get_device()` read the bounded, synchronous live `DeviceRegistry`. `await engine.saved_devices(protocol=None)` reads the injected storage, including records from previous sessions when supported by the driver.
+
+The engine awaits `storage.upsert(device)` after normalized `ADDED` and `UPDATED` events, before yielding those events. Duplicate observations are suppressed and not written. A `REMOVED` event clears the live registry record but **does not delete** the remembered record. To forget a device explicitly, call `await storage.remove(protocol, identifier)`. Previously saved devices are not automatically considered online when an engine starts.
+
+Storage write errors are logged and discovery continues by default; `strict=True` propagates them. The caller owns initialization and cleanup of any resources used by its storage driver. Reusing one `InMemoryStorage` instance across engines retains its records while that instance exists, but not across process restarts.
+
+Pairing, device control, and automation remain outside SNF.
