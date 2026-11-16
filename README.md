@@ -271,6 +271,14 @@ A plugin implements async `start()`, async-iterator `discover()`, and async
 `stop()` methods. It yields `DiscoveryEvent` objects. The plugin owns its protocol
 resources; the engine handles lifecycle, concurrency, aggregation and inventory.
 
+## Logging
+
+SNF uses Python's standard `logging` hierarchy (`snf.engine`, `snf.plugins`,
+`snf.adapters.*`) and installs only a `NullHandler` on `snf`. SNF does not
+configure global logging or choose output destinations. Consuming applications
+control handlers, levels, formatting, and log files. See
+[Logging](docs/logging.md) for examples of shared and separate log files.
+
 ## Development
 
 ```bash
