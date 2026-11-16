@@ -11,6 +11,7 @@ from typing import Any, Literal, Protocol
 
 from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
+
 class _Addressable(Protocol):
     address: str
 
