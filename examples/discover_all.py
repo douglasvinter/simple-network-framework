@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, load_plugins
+from snf import DiscoveryEngine, create_plugins
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,13 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    available = load_plugins()
-    selected = []
-    for name, plugin_type in available.items():
-        try:
-            selected.append(plugin_type())
-        except Exception:
-            _LOGGER.exception("Failed to initialize discovery plugin %r", name)
+    selected = create_plugins()
 
     _LOGGER.info("Starting discovery with plugins: %s", [p.name for p in selected])
 
