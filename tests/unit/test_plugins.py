@@ -6,7 +6,13 @@ import snf.plugins as plugin_module
 
 
 class EntryPoint:
-    def __init__(self, name: str, value: str, loaded: object = None, error: Exception | None = None):
+    def __init__(
+        self,
+        name: str,
+        value: str,
+        loaded: object = None,
+        error: Exception | None = None,
+    ):
         self.name = name
         self.value = value
         self._loaded = loaded
@@ -31,7 +37,9 @@ class ValidPlugin:
 
 
 def test_load_plugins_logs_import_failure_and_continues(monkeypatch, caplog):
-    broken = EntryPoint("broken", "broken_plugin:Plugin", error=ImportError("missing dependency"))
+    broken = EntryPoint(
+        "broken", "broken_plugin:Plugin", error=ImportError("missing dependency")
+    )
     valid = EntryPoint("valid", "valid_plugin:Plugin", loaded=ValidPlugin)
     monkeypatch.setattr(plugin_module, "entry_points", lambda **kwargs: [broken, valid])
 
