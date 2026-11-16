@@ -95,7 +95,7 @@ async def test_engine_cleans_up_all_plugins_when_startup_fails():
     failing = FailingPlugin()
 
     with pytest.raises(RuntimeError, match="startup failed"):
-        async with DiscoveryEngine([healthy, failing]):
+        async with DiscoveryEngine([healthy, failing], strict=True):
             pytest.fail("The context manager must not be entered")
 
     assert healthy.started
