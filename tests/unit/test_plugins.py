@@ -73,3 +73,34 @@ def test_load_plugins_logs_and_skips_duplicate_entry_points(monkeypatch, caplog)
 
     assert loaded == {"same": ValidPlugin}
     assert "duplicate SNF protocol plugin" in caplog.text
+
+
+class BrokenConstructorPlugin(ValidPlugin):
+    def __init__(self):
+        raise RuntimeError("cannot initialize")
+
+
+def test_create_plugins_skips_broken_constructor_by_default(monkeypatch, caplog):
+    monkeypatch.setattr(
+        plugin_module,
+        "load_plugins",
+        lambda: {"broken": BrokenConstructorPlugin, "valid": ValidPlugin},
+    )
+    with caplog.at_level(logging.ERROR, logger="snf.plugins"):
+        instances = plugin_module.create_plugins()
+
+    assert len(instances) == 1
+    assert isinstance(instances[0], ValidPlugin)
+    assert "Failed to initialize SNF protocol plugin 'broken'" in caplog.text
+
+
+def test_create_plugins_strict_raises_constructor_error(monkeypatch):
+    monkeypatch.setattr(
+        plugin_module,
+        "load_plugins",
+        lambda: {"broken": BrokenConstructorPlugin, "valid": ValidPlugin},
+    )
+    import pytest
+
+    with pytest.raises(RuntimeError, match="cannot initialize"):
+        plugin_module.create_plugins(strict=True)
