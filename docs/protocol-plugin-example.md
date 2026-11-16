@@ -252,7 +252,7 @@ A consuming application uses the same engine as it does for built-in adapters:
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, load_plugins
+from snf import DiscoveryEngine, InMemoryStorage, load_plugins
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -262,7 +262,7 @@ async def main() -> None:
     plugin_class = available["example-beacon"]
     plugin = plugin_class(listen_host="0.0.0.0", listen_port=19001)
 
-    async with DiscoveryEngine([plugin]) as engine:
+    async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         async for event in engine.discover():
             _LOGGER.info(
                 "%s: %s (%s)",
