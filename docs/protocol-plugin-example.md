@@ -279,7 +279,7 @@ if __name__ == "__main__":
 
 The application does not need to know about UDP datagrams or the plugin's parser. It only sees SNF domain models and lifecycle events.
 
-For applications that load several optional plugins, initialize each one independently and log failures, as shown in the [Developer Guide](developer-guide.md#3-run-discovery).
+For automatic discovery of installed plugins, `create_plugins()` handles construction failures internally. For explicitly configured instances, `DiscoveryEngine` handles startup failures internally. Both offer `strict=True` to fail fast instead.
 
 ## 7. Test the protocol translation
 
