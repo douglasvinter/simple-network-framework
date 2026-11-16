@@ -1,5 +1,10 @@
 """Simple Network Framework public API."""
 
+import logging
+
+# Library logging is configured by the consuming application.
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+
 from snf.engine import DiscoveryEngine
 from snf.models import (
     Device,
