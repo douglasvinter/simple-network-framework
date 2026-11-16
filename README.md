@@ -194,7 +194,12 @@ logger = logging.getLogger(__name__)
 
 async def main() -> None:
     available = load_plugins()
-    selected = [plugin_type() for plugin_type in available.values()]
+    selected = []
+    for plugin_name, plugin_type in available.items():
+        try:
+            selected.append(plugin_type())
+        except Exception:
+            logger.exception("Failed to initialize plugin %r", plugin_name)
 
     async with DiscoveryEngine(selected) as discovery:
         async for event in discovery.discover():
