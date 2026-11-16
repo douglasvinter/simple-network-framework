@@ -8,7 +8,7 @@ from snf.models import (
     Endpoint,
     Service,
 )
-from snf.plugins import DiscoveryPlugin, load_plugins
+from snf.plugins import DiscoveryPlugin, create_plugins, load_plugins
 from snf.registry import DeviceRegistry
 
 __all__ = [
@@ -20,6 +20,7 @@ __all__ = [
     "DiscoveryState",
     "Endpoint",
     "Service",
+    "create_plugins",
     "load_plugins",
 ]
 
