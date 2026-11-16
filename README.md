@@ -218,6 +218,27 @@ To include SLP, install OpenSLP and make sure `slptool` is on `PATH` before
 instantiating its adapter. The example script selects SLP automatically when
 `slptool` is available.
 
+## Protocol-specific examples
+
+Run these scripts from the repository root after installing SNF in your Python
+environment (for local development, `python -m pip install -e '.[all,dev]'`):
+
+```bash
+python examples/mdns_test.py
+python examples/ssdp_test.py
+python examples/slp_test.py
+python examples/ble_test.py
+python examples/discover_all.py
+```
+
+Each standalone example uses `DiscoveryEngine` with one configured adapter,
+except `discover_all.py`, which loads installed entry-point plugins.
+SSDP requires `async-upnp-client`, mDNS requires `zeroconf`, and BLE
+requires `bleak` plus a supported Bluetooth adapter and permissions.
+SLP requires the external OpenSLP `slptool` executable on `PATH`.
+If there are no matching devices/services, the discovery stream may wait
+without printing events. Press Ctrl+C to stop the examples.
+
 ## Domain model
 
 - `Device`: a protocol-scoped discovered inventory record.
