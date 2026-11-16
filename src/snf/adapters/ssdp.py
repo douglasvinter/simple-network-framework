@@ -66,7 +66,7 @@ class SSDPPlugin:
                 if not host:
                     return
                 raw_port = values.get("_port")
-                port = int(raw_port) if raw_port is not None else None
+                port = int(raw_port) if isinstance(raw_port, (str, int, bytes, bytearray)) else None
                 usn = str(values.get("usn", ""))
                 location = values.get("location")
                 identifier = usn or str(location or host)
