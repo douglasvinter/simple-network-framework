@@ -29,15 +29,15 @@ All plugins started
     v
 Create one asyncio task per plugin
     |
-    +------------------+------------------+
-    |                  |                  |
-    v                  v                  v
- _pump(SSDP)        _pump(mDNS)         _pump(BLE)
-    |                  |                  |
-    v                  v                  v
- plugin.discover()  plugin.discover()  plugin.discover()
-    |                  |                  |
-    +------------------+------------------+
+    +------------------+------------------+------------------+
+    |                  |                  |                  |
+    v                  v                  v                  v
+ _pump(SSDP)        _pump(mDNS)         _pump(BLE)          _pump(SLP)
+    |                  |                  |                  |
+    v                  v                  v                  v
+ plugin.discover()  plugin.discover()  plugin.discover()  plugin.discover()
+    |                  |                  |                  |
+    +------------------+------------------+------------------+
                        |
                        v
                 asyncio.Queue
