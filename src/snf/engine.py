@@ -27,8 +27,11 @@ class DiscoveryEngine:
         plugins: Iterable[DiscoveryPlugin],
         *,
         dedupe_cache_size: int = 4096,
+        strict: bool = False,
     ) -> None:
         self._plugins = tuple(plugins)
+        self._active_plugins: tuple[DiscoveryPlugin, ...] = ()
+        self._strict = strict
         names = [plugin.name for plugin in self._plugins]
         if len(names) != len(set(names)):
             raise ValueError("Only one instance of each protocol plugin is allowed")
@@ -56,26 +59,44 @@ class DiscoveryEngine:
                 return_exceptions=True,
             )
         except BaseException:
-            await self._stop_plugins()
+            await self._stop_plugins(self._plugins)
             raise
 
-        failures = [result for result in results if isinstance(result, BaseException)]
-        if failures:
-            await self._stop_plugins()
+        active: list[DiscoveryPlugin] = []
+        failures: list[BaseException] = []
+        for plugin, result in zip(self._plugins, results, strict=True):
+            if isinstance(result, BaseException):
+                failures.append(result)
+                _LOGGER.error(
+                    "Failed to start discovery plugin %s: %s",
+                    plugin.name,
+                    result,
+                    exc_info=(type(result), result, result.__traceback__),
+                )
+                try:
+                    await plugin.stop()
+                except Exception:
+                    _LOGGER.exception("Failed to clean up plugin %s after startup failure", plugin.name)
+            else:
+                active.append(plugin)
+
+        if failures and self._strict:
+            await self._stop_plugins(tuple(active))
             raise failures[0]
 
+        self._active_plugins = tuple(active)
         self._started = True
         return self
 
     async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
         await self.stop()
 
-    async def _stop_plugins(self) -> None:
+    async def _stop_plugins(self, plugins: tuple[DiscoveryPlugin, ...]) -> None:
         results = await asyncio.gather(
-            *(plugin.stop() for plugin in reversed(self._plugins)),
+            *(plugin.stop() for plugin in reversed(plugins)),
             return_exceptions=True,
         )
-        for plugin, result in zip(reversed(self._plugins), results, strict=True):
+        for plugin, result in zip(reversed(plugins), results, strict=True):
             if isinstance(result, BaseException):
                 _LOGGER.warning("Failed to stop %s cleanly: %s", plugin.name, result)
 
@@ -84,7 +105,8 @@ class DiscoveryEngine:
         if not self._started:
             return
         self._started = False
-        await self._stop_plugins()
+        await self._stop_plugins(self._active_plugins)
+        self._active_plugins = ()
 
     async def _pump(
         self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]
@@ -112,13 +134,13 @@ class DiscoveryEngine:
         """Merge plugin streams and update the in-memory device inventory."""
         if not self._started:
             raise RuntimeError("Use DiscoveryEngine as an async context manager first")
-        if not self._plugins:
+        if not self._active_plugins:
             return
 
         queue: asyncio.Queue[object] = asyncio.Queue()
         tasks = [
             asyncio.create_task(self._pump(plugin, queue), name=f"snf:{plugin.name}")
-            for plugin in self._plugins
+            for plugin in self._active_plugins
         ]
         remaining = len(tasks)
         try:
