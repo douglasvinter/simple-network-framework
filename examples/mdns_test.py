@@ -6,7 +6,7 @@ import logging
 from snf import DiscoveryEngine
 from snf.adapters.mdns import DEFAULT_SERVICE_TYPES, MDNSPlugin
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("examples.mdns")
 
 
 async def main() -> None:
