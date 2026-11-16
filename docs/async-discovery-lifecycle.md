@@ -136,8 +136,8 @@ The engine:
 1. Rejects a second concurrent start of the same engine instance.
 2. Calls every plugin's `start()`.
 3. Awaits them through `asyncio.gather(..., return_exceptions=True)`.
-4. If startup failures occurred, attempts to stop all configured plugins and raises the first failure.
-5. Marks itself as started only after all plugin starts succeed.
+4. On failure, logs and cleans up the failing plugin while allowing successful plugins to continue by default; `strict=True` instead stops all successfully started plugins and raises.
+5. Marks itself as started with the successfully started plugins.
 
 Using `gather()` means startup operations can overlap. For example, an mDNS adapter may initialize its browser while a BLE adapter starts scanning. The engine does not start one adapter and wait for its full discovery lifetime before starting the next.
 
@@ -338,4 +338,4 @@ Useful log messages include:
 - `Discovery pump stopped ...`: the pump exited.
 
 A pump-start message does not prove that a device has been discovered. It only confirms that the engine is consuming that plugin's iterator. Some protocols are quiet until a device advertises or responds, and mDNS is event-driven rather than a repeated search loop.
-\n\n## Plugin startup failure policy\n\nBy default, `DiscoveryEngine(plugins, storage=InMemoryStorage())` logs and cleans up a plugin whose `start()` fails, while successfully started plugins continue discovery. Set `DiscoveryEngine(plugins, strict=True)` to fail startup and stop all successfully started plugins before propagating the error. Constructor failures are handled by `create_plugins()` (default: log and skip; `strict=True`: re-raise). When all plugins fail to start in non-strict mode, `discover()` finishes without yielding events.\n
+\n\n## Plugin startup failure policy\n\nBy default, `DiscoveryEngine(plugins, storage=InMemoryStorage())` logs and cleans up a plugin whose `start()` fails, while successfully started plugins continue discovery. Set `DiscoveryEngine(plugins, storage=InMemoryStorage(), strict=True)` to fail startup and stop all successfully started plugins before propagating the error. Constructor failures are handled by `create_plugins()` (default: log and skip; `strict=True`: re-raise). When all plugins fail to start in non-strict mode, `discover()` finishes without yielding events.\n
