@@ -31,12 +31,12 @@ A consumer creates plugin instances and enters the engine's asynchronous context
                                          |
           +--------------------+--------------------+--------------------+
           |                    |                    |                    |
-         v                    v                    v                    v
-    _pump(SSDP)          _pump(mDNS)           _pump(BLE)           _pump(SLP)
-         |                    |                    |                    |
-         v                    v                    v                    v
- plugin.discover()    plugin.discover()    plugin.discover()    plugin.discover()
-         |                    |                    |                    |
+          v                    v                    v                    v
+     _pump(SSDP)          _pump(mDNS)           _pump(BLE)           _pump(SLP)
+          |                    |                    |                    |
+          v                    v                    v                    v
+    plugin.discover()    plugin.discover()    plugin.discover()    plugin.discover()
+          |                    |                    |                    |
           +--------------------+--------------------+--------------------+
                                          |
                                          v
