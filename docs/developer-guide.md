@@ -114,6 +114,9 @@ async with DiscoveryEngine(selected) as engine:
         # Current inventory snapshot, not a historical event list.
         current_devices = engine.devices
 
+        # Filter a point-in-time snapshot by protocol.
+        mdns_devices = engine.snapshot(protocol="mdns")
+
         # Identifiers are scoped to the protocol.
         current = engine.get_device(device.protocol, device.identifier)
 ```
@@ -127,6 +130,8 @@ The public API also exposes the domain models:
 - `DiscoveryState`
 
 The `DeviceRegistry` class is public, but most applications should use the inventory managed by `DiscoveryEngine`.
+
+Use `engine.snapshot()` for all devices or `engine.snapshot(protocol="ble")` for one protocol. Both return immutable tuples representing the inventory at the moment of the call; they do not trigger discovery or wait for new devices. `engine.devices` remains an alias for the unfiltered snapshot. An unknown protocol returns an empty tuple. Snapshots only reflect events already consumed through `engine.discover()`.
 
 ### Understand the event states
 
