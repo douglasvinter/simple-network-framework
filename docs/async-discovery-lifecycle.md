@@ -338,3 +338,4 @@ Useful log messages include:
 - `Discovery pump stopped ...`: the pump exited.
 
 A pump-start message does not prove that a device has been discovered. It only confirms that the engine is consuming that plugin's iterator. Some protocols are quiet until a device advertises or responds, and mDNS is event-driven rather than a repeated search loop.
+\n\n## Plugin startup failure policy\n\nBy default, `DiscoveryEngine(plugins)` logs and cleans up a plugin whose `start()` fails, while successfully started plugins continue discovery. Set `DiscoveryEngine(plugins, strict=True)` to fail startup and stop all successfully started plugins before propagating the error. Constructor failures are handled by `create_plugins()` (default: log and skip; `strict=True`: re-raise). When all plugins fail to start in non-strict mode, `discover()` finishes without yielding events.\n
