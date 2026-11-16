@@ -90,7 +90,11 @@ if __name__ == "__main__":
 
 The example above uses the adapters that are installed and registered. It does not automatically include SLP. To use SLP, install OpenSLP, ensure `slptool` is on `PATH`, and instantiate its registered plugin.
 
-By default, `create_plugins()` logs and skips plugins that fail construction, and `DiscoveryEngine` logs, cleans up, and skips plugins that fail `start()`. To require all selected plugins, use `create_plugins(strict=True)` and `DiscoveryEngine(selected, strict=True)`. Strict startup still cleans up successfully started plugins before raising.\n\nThe async context starts the plugins and guarantees that the engine's shutdown path runs when the context exits. The discovery iterator is intended to run until the plugin streams finish or the consumer cancels/exits the context.
+By default, `create_plugins()` logs and skips plugins that fail construction, and `DiscoveryEngine` logs, cleans up, and skips plugins that fail `start()`. To require all selected plugins, use `create_plugins(strict=True)` and `DiscoveryEngine(selected, strict=True)`. Strict startup still cleans up successfully started plugins before raising.
+
+The async context starts the plugins and guarantees that the engine's shutdown path runs when the context exits. The discovery iterator is intended to run until the plugin streams finish or the consumer cancels/exits the context.
+
+See [Logging](logging.md) for routing SNF logs into your application's handlers.
 
 ## 4. Consume events and query inventory
 
