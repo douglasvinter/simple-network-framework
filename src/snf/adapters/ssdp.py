@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from importlib.util import find_spec
 
 from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
@@ -58,7 +58,7 @@ class SSDPPlugin:
             discovered: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
 
             async def on_response(
-                headers: object,
+                headers: Mapping[str, object],
                 destination: asyncio.Queue[DiscoveryEvent] = discovered,
             ) -> None:
                 values = {str(key).lower(): value for key, value in dict(headers).items()}
