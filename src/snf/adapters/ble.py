@@ -7,9 +7,13 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
-from typing import Any
+from typing import Any, Literal, Protocol
 
 from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
+
+class _Addressable(Protocol):
+    address: str
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +27,7 @@ class BLEPlugin:
         self,
         *,
         service_uuids: list[str] | None = None,
-        scanning_mode: str = "active",
+        scanning_mode: Literal["active", "passive"] = "active",
         device_timeout: float = 15.0,
         rssi_update_threshold: int = 5,
     ) -> None:
@@ -47,7 +51,7 @@ class BLEPlugin:
         self._running = False
 
     @staticmethod
-    def _to_device(device: object, advertisement_data: object) -> Device:
+    def _to_device(device: _Addressable, advertisement_data: object) -> Device:
         """Normalize Bleak's public BLEDevice and AdvertisementData objects."""
         address = str(device.address)
         advertised_name = getattr(advertisement_data, "local_name", None)
@@ -86,7 +90,7 @@ class BLEPlugin:
             },
         )
 
-    def _on_advertisement(self, device: object, advertisement_data: object) -> None:
+    def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
             return
         record = self._to_device(device, advertisement_data)
