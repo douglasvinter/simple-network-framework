@@ -6,7 +6,7 @@ import logging
 from snf import DiscoveryEngine
 from snf.adapters.ble import BLEPlugin
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("examples.ble")
 
 
 async def main() -> None:
