@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncIterator, Iterable
 from typing import TYPE_CHECKING
 
-from snf.models import DiscoveryEvent
+from snf.models import DiscoveryEvent, DiscoveryState
 from snf.plugins import DiscoveryPlugin
 from snf.registry import DeviceRegistry
 from snf.storage import InventoryStorage
@@ -165,13 +165,8 @@ class DiscoveryEngine:
                 assert isinstance(item, DiscoveryEvent)
                 normalized = self._registry.process(item)
                 if normalized is not None:
-                    if normalized.state.value != "removed":
-                        try:
-                            await self.storage.upsert(normalized.device)
-                        except Exception:
-                            _LOGGER.exception("Failed to persist discovered device %s", normalized.device.identity)
-                            if self._strict:
-                                raise
+                    if normalized.state is not DiscoveryState.REMOVED:
+                        await self.storage.upsert(normalized.device)
                     yield normalized
         finally:
             for task in tasks:
