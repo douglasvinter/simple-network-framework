@@ -1,4 +1,4 @@
-"""Run the installed network discovery plugins and log discovered devices."""
+"""Run all installed discovery plugins and log discovered devices."""
 
 import asyncio
 import logging
@@ -17,10 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 async def main() -> None:
     available = load_plugins()
     selected = []
-    for name in ("ssdp", "mdns"):
-        plugin_type = available.get(name)
-        if plugin_type is None:
-            continue
+    for name, plugin_type in available.items():
         try:
             selected.append(plugin_type())
         except Exception:
