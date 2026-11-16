@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 logging.getLogger("snf").setLevel(logging.DEBUG)
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("examples.discover_all")
 
 
 async def main() -> None:
