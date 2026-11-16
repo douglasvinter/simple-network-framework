@@ -248,10 +248,14 @@ There is no database, file, or durable storage in the current implementation. Th
 The engine yields an event only when the registry returns a meaningful normalized event:
 
 ```python
+import logging
+
+logger = logging.getLogger(__name__)
+
 async with DiscoveryEngine(plugins) as engine:
     async for event in engine.discover():
-        print(event.state, event.device)
-        print("Current inventory:", engine.devices)
+        logger.info("Discovery event: %s %s", event.state, event.device)
+        logger.debug("Current inventory: %s", engine.devices)
 ```
 
 The consumer sees one merged stream. It does not need to create one loop per protocol.
