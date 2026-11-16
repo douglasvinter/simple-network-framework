@@ -1,0 +1,39 @@
+"""Discover SSDP/UPnP devices using the SNF discovery engine."""
+
+import asyncio
+import logging
+
+from snf import DiscoveryEngine
+from snf.adapters.ssdp import SSDPPlugin
+
+_LOGGER = logging.getLogger("examples.ssdp")
+
+
+async def main() -> None:
+    plugin = SSDPPlugin(
+        search_target="ssdp:all",
+        search_interval=30.0,
+        search_timeout=5,
+    )
+
+    async with DiscoveryEngine([plugin]) as discovery:
+        async for event in discovery.discover():
+            device = event.device
+            _LOGGER.info(
+                "[%s] [%s] %s (%s) endpoints=%s services=%s",
+                event.state.value,
+                device.protocol,
+                device.name,
+                device.identifier,
+                device.endpoints,
+                device.services,
+            )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logging.getLogger("snf").setLevel(logging.DEBUG)
+    asyncio.run(main())

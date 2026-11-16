@@ -44,9 +44,11 @@ class DeviceRegistry:
         """Return one device by its protocol-scoped identity."""
         return self._devices.get((protocol, identifier))
 
-    def snapshot(self) -> tuple[Device, ...]:
-        """Return a stable snapshot of the current inventory."""
-        return tuple(self._devices.values())
+    def snapshot(self, *, protocol: str | None = None) -> tuple[Device, ...]:
+        """Return inventory records, optionally restricted to one protocol."""
+        if protocol is None:
+            return tuple(self._devices.values())
+        return tuple(device for device in self._devices.values() if device.protocol == protocol)
 
     def _trim(self) -> None:
         while len(self._devices) > self.max_entries:

@@ -184,33 +184,60 @@ python examples/discover_all.py
 
 ```python
 import asyncio
-from snf import DiscoveryEngine, load_plugins
+import logging
+
+from snf import DiscoveryEngine, create_plugins
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    available = load_plugins()
-    selected = [
-        available[name]()
-        for name in ("ssdp", "mdns", "ble")
-        if name in available
-    ]
+    selected = create_plugins()
 
     async with DiscoveryEngine(selected) as discovery:
         async for event in discovery.discover():
             device = event.device
-            print(event.state, device.protocol, device.name, device.endpoints)
+            logger.info(
+                "%s %s %s %s",
+                event.state,
+                device.protocol,
+                device.name,
+                device.endpoints,
+            )
 
 
 asyncio.run(main())
 ```
 
-The engine starts plugins concurrently and merges their event streams. A consumer
+SNF logs and skips plugins that fail construction or startup by default. Use\n`create_plugins(strict=True)` to fail on construction, and\n`DiscoveryEngine(selected, strict=True)` to fail on startup.\n\nThe engine starts plugins concurrently and merges their event streams. A consumer
 can inspect the current immutable inventory through `engine.devices`, or retrieve
 a protocol-scoped record with `engine.get_device(protocol, identifier)`.
 
 To include SLP, install OpenSLP and make sure `slptool` is on `PATH` before
 instantiating its adapter. The example script selects SLP automatically when
 `slptool` is available.
+
+## Protocol-specific examples
+
+Run these scripts from the repository root after installing SNF in your Python
+environment (for local development, `python -m pip install -e '.[all,dev]'`):
+
+```bash
+python examples/mdns_test.py
+python examples/ssdp_test.py
+python examples/slp_test.py
+python examples/ble_test.py
+python examples/discover_all.py
+```
+
+Each standalone example uses `DiscoveryEngine` with one configured adapter,
+except `discover_all.py`, which loads installed entry-point plugins.
+SSDP requires `async-upnp-client`, mDNS requires `zeroconf`, and BLE
+requires `bleak` plus a supported Bluetooth adapter and permissions.
+SLP requires the external OpenSLP `slptool` executable on `PATH`.
+If there are no matching devices/services, the discovery stream may wait
+without printing events. Press Ctrl+C to stop the examples.
 
 ## Domain model
 
@@ -264,6 +291,14 @@ my-protocol = "my_snf_plugin:MyProtocolPlugin"
 A plugin implements async `start()`, async-iterator `discover()`, and async
 `stop()` methods. It yields `DiscoveryEvent` objects. The plugin owns its protocol
 resources; the engine handles lifecycle, concurrency, aggregation and inventory.
+
+## Logging
+
+SNF uses Python's standard `logging` hierarchy (`snf.engine`, `snf.plugins`,
+`snf.adapters.*`) and installs only a `NullHandler` on `snf`. SNF does not
+configure global logging or choose output destinations. Consuming applications
+control handlers, levels, formatting, and log files. See
+[Logging](docs/logging.md) for examples of shared and separate log files.
 
 ## Development
 

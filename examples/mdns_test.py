@@ -1,9 +1,12 @@
-"""Run mDNS discovery and print the discovered service inventory."""
+"""Discover mDNS/DNS-SD services using the SNF discovery engine."""
 
 import asyncio
+import logging
 
 from snf import DiscoveryEngine
 from snf.adapters.mdns import DEFAULT_SERVICE_TYPES, MDNSPlugin
+
+_LOGGER = logging.getLogger("examples.mdns")
 
 
 async def main() -> None:
@@ -15,11 +18,21 @@ async def main() -> None:
     async with DiscoveryEngine([plugin]) as discovery:
         async for event in discovery.discover():
             device = event.device
-            print(
-                f"[{event.state.value}] [{device.protocol}] "
-                f"{device.name} {device.endpoints}"
+            _LOGGER.info(
+                "[%s] [%s] %s (%s) endpoints=%s services=%s",
+                event.state.value,
+                device.protocol,
+                device.name,
+                device.identifier,
+                device.endpoints,
+                device.services,
             )
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logging.getLogger("snf").setLevel(logging.DEBUG)
     asyncio.run(main())

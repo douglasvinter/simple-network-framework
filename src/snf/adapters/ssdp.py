@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from importlib.util import find_spec
 
 from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
@@ -57,13 +57,16 @@ class SSDPPlugin:
             )
             discovered: asyncio.Queue[DiscoveryEvent] = asyncio.Queue()
 
-            async def on_response(headers: object) -> None:
+            async def on_response(
+                headers: Mapping[str, object],
+                destination: asyncio.Queue[DiscoveryEvent] = discovered,
+            ) -> None:
                 values = {str(key).lower(): value for key, value in dict(headers).items()}
                 host = str(values.get("_host", ""))
                 if not host:
                     return
                 raw_port = values.get("_port")
-                port = int(raw_port) if raw_port is not None else None
+                port = int(raw_port) if isinstance(raw_port, (str, int, bytes, bytearray)) else None
                 usn = str(values.get("usn", ""))
                 location = values.get("location")
                 identifier = usn or str(location or host)
@@ -82,7 +85,7 @@ class SSDPPlugin:
                     services=(service,),
                     metadata={"location": location, "usn": usn},
                 )
-                await discovered.put(DiscoveryEvent(DiscoveryState.ADDED, device))
+                await destination.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
             await async_search(
                 async_callback=on_response,

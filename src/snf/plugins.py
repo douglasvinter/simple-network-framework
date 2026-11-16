@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from importlib.metadata import EntryPoint, entry_points
 from typing import Protocol, runtime_checkable
 
 from snf.models import DiscoveryEvent
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -26,7 +29,12 @@ class DiscoveryPlugin(Protocol):
 
 
 def load_plugins() -> dict[str, type[DiscoveryPlugin]]:
-    """Load classes registered in the snf.protocols entry-point group."""
+    """Load valid plugin classes, logging and isolating individual failures.
+
+    An entry point can fail before its plugin class is imported (for example,
+    because a module-level optional dependency is missing). In that case the
+    loader is the only component able to report the failure.
+    """
     loaded: dict[str, type[DiscoveryPlugin]] = {}
     candidates: list[EntryPoint] = sorted(
         entry_points(group="snf.protocols"), key=lambda entry_point: entry_point.name
@@ -34,14 +42,45 @@ def load_plugins() -> dict[str, type[DiscoveryPlugin]]:
 
     for entry_point in candidates:
         if entry_point.name in loaded:
-            raise RuntimeError(f"Duplicate SNF protocol plugin: {entry_point.name}")
-        plugin = entry_point.load()
-        if not isinstance(plugin, type):
-            raise TypeError(
-                f"Plugin entry point {entry_point.name!r} must resolve to a class"
+            _LOGGER.error(
+                "Skipping duplicate SNF protocol plugin entry point %r",
+                entry_point.name,
             )
-        for method in ("start", "discover", "stop"):
-            if not callable(getattr(plugin, method, None)):
-                raise TypeError(f"Plugin {entry_point.name!r} is missing {method}()")
+            continue
+
+        try:
+            plugin = entry_point.load()
+            if not isinstance(plugin, type):
+                raise TypeError("entry point must resolve to a plugin class")
+            for method in ("start", "discover", "stop"):
+                if not callable(getattr(plugin, method, None)):
+                    raise TypeError(f"plugin class is missing {method}()")
+        except Exception:
+            _LOGGER.exception(
+                "Failed to load SNF protocol plugin %r from %s",
+                entry_point.name,
+                entry_point.value,
+            )
+            continue
+
         loaded[entry_point.name] = plugin
+        _LOGGER.debug("Loaded SNF protocol plugin %r", entry_point.name)
+
     return loaded
+
+
+def create_plugins(*, strict: bool = False) -> list[DiscoveryPlugin]:
+    """Instantiate registered plugins, isolating failures unless strict.
+
+    Use load_plugins() when plugin classes or custom constructor arguments
+    are needed instead of default plugin instances.
+    """
+    instances: list[DiscoveryPlugin] = []
+    for name, plugin_type in load_plugins().items():
+        try:
+            instances.append(plugin_type())
+        except Exception:
+            _LOGGER.exception("Failed to initialize SNF protocol plugin %r", name)
+            if strict:
+                raise
+    return instances

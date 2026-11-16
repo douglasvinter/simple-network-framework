@@ -1,5 +1,7 @@
 """Simple Network Framework public API."""
 
+import logging
+
 from snf.engine import DiscoveryEngine
 from snf.models import (
     Device,
@@ -8,8 +10,11 @@ from snf.models import (
     Endpoint,
     Service,
 )
-from snf.plugins import DiscoveryPlugin, load_plugins
+from snf.plugins import DiscoveryPlugin, create_plugins, load_plugins
 from snf.registry import DeviceRegistry
+
+# Library logging is configured by the consuming application.
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "Device",
@@ -20,6 +25,7 @@ __all__ = [
     "DiscoveryState",
     "Endpoint",
     "Service",
+    "create_plugins",
     "load_plugins",
 ]
 
