@@ -1,9 +1,4 @@
-"""SLP adapter using the OpenSLP project's slptool User Agent.
-
-OpenSLP is an external native dependency. This adapter deliberately delegates
-SLPv2 wire encoding, multicast convergence, scopes, and Directory Agent handling
-to OpenSLP rather than implementing RFC 2608 itself.
-"""
+"""SLP adapter using the OpenSLP project's slptool User Agent."""
 
 from __future__ import annotations
 
@@ -12,7 +7,7 @@ import shutil
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
-from snf.models import Service
+from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 
 class SLPPlugin:
@@ -52,9 +47,7 @@ class SLPPlugin:
             command.extend(["-s", self.scope])
         command.extend(arguments)
         process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         try:
             stdout, stderr = await asyncio.wait_for(
@@ -80,7 +73,7 @@ class SLPPlugin:
         self._stop_event.clear()
 
     @staticmethod
-    def _to_service(service_url: str) -> Service | None:
+    def _to_device(service_url: str) -> Device:
         value = service_url.strip()
         lifetime: str | None = None
         if "," in value:
@@ -88,26 +81,26 @@ class SLPPlugin:
             if possible_lifetime.isdigit():
                 value, lifetime = candidate, possible_lifetime
 
-        prefix, separator, endpoint = value.partition("://")
+        prefix, separator, endpoint_value = value.partition("://")
         if not separator:
-            return Service(
-                protocol="slp",
-                name=value,
-                address="",
+            return Device(
+                protocol="slp", identifier=value, name=value,
                 metadata={"url": value, "lifetime": lifetime},
             )
         service_type = prefix.removeprefix("service:")
-        parsed = urlsplit(f"slp://{endpoint}")
-        return Service(
-            protocol="slp",
-            name=value,
-            address=parsed.hostname or "",
-            port=parsed.port,
-            service_type=service_type or None,
-            metadata={"url": value, "lifetime": lifetime},
+        parsed = urlsplit(f"slp://{endpoint_value}")
+        endpoints = (
+            (Endpoint("ip", parsed.hostname, parsed.port),) if parsed.hostname else ()
+        )
+        service = Service(
+            name=value, service_type=service_type or None, endpoints=endpoints
+        )
+        return Device(
+            protocol="slp", identifier=value, name=value, endpoints=endpoints,
+            services=(service,), metadata={"url": value, "lifetime": lifetime},
         )
 
-    async def discover(self) -> AsyncIterator[Service]:
+    async def discover(self) -> AsyncIterator[DiscoveryEvent]:
         if not self._running:
             raise RuntimeError("SLPPlugin.start() must be called before discover()")
 
@@ -123,9 +116,9 @@ class SLPPlugin:
                     if service_url in self._seen:
                         continue
                     self._seen.add(service_url)
-                    service = self._to_service(service_url)
-                    if service is not None:
-                        yield service
+                    yield DiscoveryEvent(
+                        DiscoveryState.ADDED, self._to_device(service_url)
+                    )
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)

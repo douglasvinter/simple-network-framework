@@ -1,4 +1,4 @@
-"""Shared, protocol-neutral discovery models."""
+"""Protocol-neutral domain models for discovered network and Bluetooth devices."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 
-class ServiceState(StrEnum):
-    """Lifecycle state reported by a discovery protocol."""
+class DiscoveryState(StrEnum):
+    """Lifecycle state of a discovered device."""
 
     ADDED = "added"
     UPDATED = "updated"
@@ -16,18 +16,50 @@ class ServiceState(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Service:
-    """A discovered service with protocol-specific metadata preserved."""
+class Endpoint:
+    """A transport-specific way to reach a device or one of its services."""
 
-    protocol: str
-    name: str
+    transport: str
     address: str
     port: int | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class Service:
+    """A service advertised by a discovered device."""
+
+    name: str
     service_type: str | None = None
-    state: ServiceState = ServiceState.ADDED
+    endpoints: tuple[Endpoint, ...] = ()
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class Device:
+    """A protocol-scoped inventory record.
+
+    The identifier is scoped by protocol. Two protocols discovering the same
+    physical device remain separate records until a consumer can correlate them
+    using stronger evidence.
+    """
+
+    protocol: str
+    identifier: str
+    name: str
+    endpoints: tuple[Endpoint, ...] = ()
+    services: tuple[Service, ...] = ()
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     @property
-    def identity(self) -> tuple[str, str, str | None]:
-        """Return a protocol-scoped identity stable across endpoint changes."""
-        return (self.protocol, self.name, self.service_type)
+    def identity(self) -> tuple[str, str]:
+        """Return the stable, protocol-scoped identity for this observation."""
+        return (self.protocol, self.identifier)
+
+
+@dataclass(frozen=True, slots=True)
+class DiscoveryEvent:
+    """A lifecycle event for a discovered device."""
+
+    state: DiscoveryState
+    device: Device
