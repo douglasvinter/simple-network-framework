@@ -162,7 +162,7 @@ The `DeviceRegistry` in `src/snf/registry.py` is the current inventory implement
 
 When capacity is exceeded, the registry evicts the oldest entry. Eviction is a capacity-management behavior and does not currently emit a `REMOVED` event.
 
-**Decision:** persistence is intentionally deferred. The inventory is process-local and is lost when the application exits. A persistence layer should be designed after the domain model and lifecycle semantics have been exercised by real consumers.
+**Decision:** the storage contract is mandatory, but database implementations are intentionally deferred. The live registry is process-local; remembered records live in the caller-supplied storage driver. The reference `InMemoryStorage` is not durable.
 
 ## 8. Adapter responsibilities and current implementations
 
@@ -204,14 +204,14 @@ The engine currently does not expose a structured collection of runtime plugin f
 | Use asyncio and async iterators | Fits I/O-bound discovery and supports concurrent protocol streams. |
 | Keep protocol implementations in adapters | Core orchestration does not depend on each protocol's library or wire format. |
 | Load third-party adapters through entry points | Enables independent plugin distributions. |
-| Keep inventory in memory for now | Avoids prematurely choosing a persistence technology or freezing storage semantics. |
+| Require an injected storage contract | Support application-defined persistence without bundling a database or compromising fast live snapshots. |
 | Delegate protocol implementations to established libraries | Reduces custom protocol code and maintenance burden. |
 
 ## 11. Current limitations and future considerations
 
 The following are explicit limitations, not guarantees the current framework already solves:
 
-- No persistence or historical inventory.
+- No bundled database implementation; historical records are available through the injected storage driver.
 - No cross-protocol device correlation.
 - No structured runtime health API for failed plugin streams.
 - No universal expiry policy across all protocols.
