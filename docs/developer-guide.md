@@ -62,19 +62,13 @@ The common application flow is:
 import asyncio
 import logging
 
-from snf import DiscoveryEngine, load_plugins
+from snf import DiscoveryEngine, create_plugins
 
 logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    available = load_plugins()
-    selected = []
-    for name, plugin_class in available.items():
-        try:
-            selected.append(plugin_class())
-        except Exception:
-            logger.exception("Failed to initialize plugin %r", name)
+    selected = create_plugins()
 
     async with DiscoveryEngine(selected) as engine:
         async for event in engine.discover():
@@ -96,7 +90,7 @@ if __name__ == "__main__":
 
 The example above uses the adapters that are installed and registered. It does not automatically include SLP. To use SLP, install OpenSLP, ensure `slptool` is on `PATH`, and instantiate its registered plugin.
 
-The async context starts the plugins and guarantees that the engine's shutdown path runs when the context exits. The discovery iterator is intended to run until the plugin streams finish or the consumer cancels/exits the context.
+By default, `create_plugins()` logs and skips plugins that fail construction, and `DiscoveryEngine` logs, cleans up, and skips plugins that fail `start()`. To require all selected plugins, use `create_plugins(strict=True)` and `DiscoveryEngine(selected, strict=True)`. Strict startup still cleans up successfully started plugins before raising.\n\nThe async context starts the plugins and guarantees that the engine's shutdown path runs when the context exits. The discovery iterator is intended to run until the plugin streams finish or the consumer cancels/exits the context.
 
 ## 4. Consume events and query inventory
 
@@ -178,7 +172,7 @@ ble = BLEPlugin(
 slp = SLPPlugin(interval=60.0)
 ```
 
-Adapters validate their optional backends during initialization and raise an actionable installation error when a dependency is missing. Applications that initialize several optional plugins should catch and log each initialization failure independently, so one unavailable backend does not prevent other plugins from running.
+Adapters validate their optional backends during initialization and raise an actionable installation error when a dependency is missing. Use `create_plugins()` for framework-managed initialization failure isolation. Applications that need custom adapter arguments can instantiate selected classes explicitly.
 
 ### What BLE discovery provides
 
