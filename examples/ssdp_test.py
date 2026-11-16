@@ -6,7 +6,7 @@ import logging
 from snf import DiscoveryEngine
 from snf.adapters.ssdp import SSDPPlugin
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("examples.ssdp")
 
 
 async def main() -> None:
