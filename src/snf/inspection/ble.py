@@ -47,7 +47,8 @@ class BLEInspector:
                 "Observation has no BLE identifier", code="INVALID_OBSERVATION"
             )
         try:
-            from bleak import BleakClient, BleakError
+            from bleak import BleakClient
+            from bleak.exc import BleakError
         except ImportError as exc:
             raise BLEInspectionError(
                 "Install BLE support with the ble extra", code="DEPENDENCY_UNAVAILABLE"
