@@ -44,9 +44,9 @@ def identify_ble_device(
     # explicitly marked as unverified: both fields can be spoofed.
     known_names = (
         (301, r"^(?:WH|WF)-1000XM[345]$", "Sony", "1000X headphones", "audio"),
-        (117, r"^Galaxy Buds(?:2|3| Pro| Live| FE|\\+|[23] Pro)?.*$",
+        (117, r"^Galaxy Buds(?:2|3| Pro| Live| FE|\+|[23] Pro)?.*$",
          "Samsung", "Galaxy Buds", "audio"),
-        (196, r"^LG (?:TONE|HBS)[\\w -]*$", "LG", "LG wireless audio", "audio"),
+        (196, r"^LG (?:TONE|HBS)[\w -]*$", "LG", "LG wireless audio", "audio"),
     )
     if local_name:
         for company_id, pattern, brand, family, category in known_names:
