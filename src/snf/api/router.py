@@ -6,10 +6,16 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
-from snf.api.schemas import DiscoveryObservationResponse, NetworkEntityResponse, UPnPDeviceResponse
+from snf.api.schemas import (
+    DiscoveryObservationResponse,
+    InspectionErrorResponse,
+    NetworkEntityResponse,
+    UPnPDeviceResponse,
+)
 from snf.entities import NetworkEntity
 from snf.inspection.upnp import UPnPInspector, UPnPInspectionError
 from snf.models import DiscoveryObservation
@@ -63,7 +69,11 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    @router.get("/discoveries/inspect", response_model=UPnPDeviceResponse)
+    @router.get(
+        "/discoveries/inspect",
+        response_model=UPnPDeviceResponse,
+        responses={502: {"model": InspectionErrorResponse}},
+    )
     async def inspect_discovery(identifier: str) -> object:
         """Explicit, read-only inspection of a discovered SSDP advertisement."""
         validate("ssdp")
@@ -77,7 +87,14 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         try:
             return await UPnPInspector().inspect_observation(observation)
         except UPnPInspectionError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            return JSONResponse(
+                status_code=502,
+                content={"error": {
+                    "code": exc.code,
+                    "message": str(exc),
+                    "raw_response": exc.raw_response,
+                }},
+            )
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
     async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:

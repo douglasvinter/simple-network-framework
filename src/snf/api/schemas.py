@@ -72,3 +72,13 @@ class UPnPDeviceResponse(BaseModel):
     model_number: str | None
     services: tuple[UPnPServiceResponse, ...]
     embedded_devices: tuple["UPnPDeviceResponse", ...]
+
+
+class InspectionErrorDetail(BaseModel):
+    code: str
+    message: str
+    raw_response: str | None = None
+
+
+class InspectionErrorResponse(BaseModel):
+    error: InspectionErrorDetail

@@ -24,3 +24,18 @@ This is an **explicit network operation**, not a background enrichment job. Use 
 ## Security and compatibility
 
 Only plain HTTP device descriptions at private LAN addresses are supported. DNS answers are validated and pinned, redirects are rejected, and HTTP responses are bounded by timeout, byte size, concurrency, and embedded-device nesting limits. Vendor-specific responses that are not UPnP root XML return a controlled error. The parsed control URLs are **data only**; they are never fetched or invoked. This inspector is not a general-purpose URL fetcher.
+
+## Inspection response contract
+
+Successful inspection retains the existing UPnP device fields, including UDN,
+device type, friendly name, manufacturer, model, services with SCPD/control/event
+URLs, and recursive embedded devices. Failures return HTTP 502 with an `error`
+object containing `code`, `message`, and `raw_response`. The raw response
+is bounded by `max_bytes` and is included for unsupported or malformed
+descriptions (e.g. Netflix MDX returning `status=ok`).
+
+Observation-based inspection requires the resolved LOCATION IP to match the
+originating SSDP observation IP; ports may differ. All DNS answers must match,
+and the vetted addresses remain pinned for HTTP. Direct `inspect(location)`
+retains private-address restrictions but has no originating SSDP source to
+compare. Failed inspections do not change discovery state.

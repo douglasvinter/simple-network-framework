@@ -1,11 +1,13 @@
 """UPnP inspection unit and local HTTP integration tests."""
 
 import asyncio
-from unittest.mock import patch
+import socket
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from snf.inspection.upnp import UPnPInspectionError, UPnPInspector, parse_description
+from snf.models import DiscoveryObservation, Endpoint
 
 XML = b"""<?xml version="1.0"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0"><device>
@@ -75,7 +77,6 @@ async def test_private_lan_http_integration():
         await server.wait_closed()
 
 
-from snf.models import DiscoveryObservation
 from snf.inspection.upnp import location_from_observation
 
 
@@ -100,28 +101,32 @@ def test_rejects_non_ssdp_or_invalid_location(observation):
 @pytest.mark.asyncio
 async def test_batch_inspection_deduplicates_shared_location():
     location = "http://192.168.15.9:9110/ip_control"
-    records = tuple(DiscoveryObservation("ssdp", f"ad-{i}", "TV", metadata={
-        "location": location
-    }) for i in range(4))
+    records = tuple(DiscoveryObservation(
+        "ssdp", f"ad-{i}", "TV",
+        endpoints=(Endpoint("ip", "192.168.15.9", 40000 + i),),
+        metadata={"location": location},
+    ) for i in range(4))
     inspector = UPnPInspector()
     parsed = parse_description(XML, location)
     with patch.object(inspector, "inspect", return_value=parsed) as mocked:
         result = await inspector.inspect_observations(records)
     assert result == {location: parsed}
-    mocked.assert_awaited_once_with(location)
+    mocked.assert_awaited_once_with(location, expected_addresses=frozenset({"192.168.15.9"}))
 
 
 @pytest.mark.asyncio
 async def test_single_observation_inspection():
     location = "http://192.168.15.9:9080"
-    observation = DiscoveryObservation("ssdp", "nonstandard-udn", "TV", metadata={
-        "location": location
-    })
+    observation = DiscoveryObservation(
+        "ssdp", "nonstandard-udn", "TV",
+        endpoints=(Endpoint("ip", "192.168.15.9", 44415),),
+        metadata={"location": location},
+    )
     inspector = UPnPInspector()
     with patch.object(inspector, "inspect", return_value=parse_description(XML, location)) as mocked:
         result = await inspector.inspect_observation(observation)
     assert result.friendly_name == "Living Room TV"
-    mocked.assert_awaited_once_with(location)
+    mocked.assert_awaited_once_with(location, expected_addresses=frozenset({"192.168.15.9"}))
 
 
 @pytest.mark.asyncio
@@ -133,8 +138,8 @@ async def test_single_observation_inspection():
 async def test_http_rejects_redirects_non_success_and_vendor_xml(status, body):
     async def handler(reader, writer):
         await reader.read(4096)
-        response = (f"HTTP/1.1 {status} Test\\r\\nContent-Length: {len(body)}\\r\\n"
-                    "Location: http://example.com/\\r\\nConnection: close\\r\\n\\r\\n").encode()
+        response = (f"HTTP/1.1 {status} Test\r\nContent-Length: {len(body)}\r\n"
+                    "Location: http://example.com/\r\nConnection: close\r\n\r\n").encode()
         writer.write(response + body)
         await writer.drain()
         writer.close()
@@ -155,9 +160,9 @@ async def test_http_rejects_redirects_non_success_and_vendor_xml(status, body):
 async def test_http_rejects_oversized_chunked_body():
     async def handler(reader, writer):
         await reader.read(4096)
-        writer.write(b"HTTP/1.1 200 OK\\r\\nTransfer-Encoding: chunked\\r\\n"
-                     b"Connection: close\\r\\n\\r\\n"
-                     b"14\\r\\n01234567890123456789\\r\\n0\\r\\n\\r\\n")
+        writer.write(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"
+                     b"Connection: close\r\n\r\n"
+                     b"14\r\n01234567890123456789\r\n0\r\n\r\n")
         await writer.drain()
         writer.close()
         await writer.wait_closed()
@@ -190,3 +195,42 @@ async def test_http_timeout_does_not_block_discovery():
     finally:
         server.close()
         await server.wait_closed()
+
+
+
+def test_plain_text_health_response_preserved():
+    with pytest.raises(UPnPInspectionError) as caught:
+        parse_description(b"status=ok", "http://192.168.15.9:9080")
+    assert caught.value.code == "UNSUPPORTED_DESCRIPTION_FORMAT"
+    assert caught.value.raw_response == "status=ok"
+
+
+def test_invalid_xml_distinguished_from_plain_text():
+    with pytest.raises(UPnPInspectionError) as caught:
+        parse_description(b"<root><device>", "http://192.168.15.9:9080")
+    assert caught.value.code == "MALFORMED_DESCRIPTION"
+
+
+@pytest.mark.asyncio
+async def test_mismatched_source_rejected_before_http():
+    observation = DiscoveryObservation(
+        "ssdp", "uuid:test", "TV",
+        endpoints=(Endpoint("ip", "192.168.15.9", 44415),),
+        metadata={"location": "http://192.168.15.10:9110/desc"},
+    )
+    with patch("snf.inspection.upnp.aiohttp.ClientSession") as session:
+        with pytest.raises(UPnPInspectionError) as caught:
+            await UPnPInspector().inspect_observation(observation)
+    assert caught.value.code == "SOURCE_ADDRESS_MISMATCH"
+    session.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_missing_source_address_rejected():
+    observation = DiscoveryObservation(
+        "ssdp", "uuid:test", "TV",
+        metadata={"location": "http://192.168.15.9:9110/desc"},
+    )
+    with pytest.raises(UPnPInspectionError) as caught:
+        await UPnPInspector().inspect_observation(observation)
+    assert caught.value.code == "SOURCE_ADDRESS_UNAVAILABLE"

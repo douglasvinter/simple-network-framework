@@ -13,7 +13,7 @@ from httpx import ASGITransport, AsyncClient
 
 from snf.api import create_router
 from snf.inspection.upnp import UPnPInspectionError, parse_description
-from snf.models import DiscoveryObservation
+from snf.models import DiscoveryObservation, Endpoint
 from snf.runtime import NetworkRuntime
 
 
@@ -29,8 +29,11 @@ class SnapshotRuntime(NetworkRuntime):
 
 @pytest.mark.asyncio
 async def test_http_inspection_end_to_end_and_error_isolation():
-    observation = DiscoveryObservation("ssdp", "uuid:sample::upnp:rootdevice", "TV",
-        metadata={"location": "http://192.168.15.9:9110/ip_control"})
+    observation = DiscoveryObservation(
+        "ssdp", "uuid:sample::upnp:rootdevice", "TV",
+        endpoints=(Endpoint("ip", "192.168.15.9", 39261),),
+        metadata={"location": "http://192.168.15.9:9110/ip_control"},
+    )
     runtime = SnapshotRuntime([observation])
     app = FastAPI()
     app.include_router(create_router(runtime), prefix="/network")
@@ -48,6 +51,8 @@ async def test_http_inspection_end_to_end_and_error_isolation():
                    side_effect=UPnPInspectionError("invalid description")):
             failure = await client.get("/network/discoveries/inspect", params={"identifier": observation.identifier})
         assert failure.status_code == 502
+        assert failure.json()["error"]["message"] == "invalid description"
+        assert failure.json()["error"]["code"] == "INSPECTION_FAILED"
         assert runtime.snapshot() == (observation,)
 
 
@@ -59,3 +64,28 @@ async def test_http_inspection_rejects_non_ssdp_protocol():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/network/discoveries/inspect", params={"identifier": "unknown"})
     assert response.status_code == 422
+
+
+
+@pytest.mark.asyncio
+async def test_plain_text_response_error_contains_raw_evidence():
+    observation = DiscoveryObservation(
+        "ssdp", "uuid:SSTVKSF1==0000000000000005297130", "Netflix MDX",
+        endpoints=(Endpoint("ip", "192.168.15.9", 44415),),
+        metadata={"location": "http://192.168.15.9:9080"},
+    )
+    app = FastAPI()
+    app.include_router(create_router(SnapshotRuntime([observation])), prefix="/network")
+    failure = UPnPInspectionError(
+        "Endpoint did not return a UPnP XML description",
+        code="UNSUPPORTED_DESCRIPTION_FORMAT", raw_response="status=ok",
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
+                   side_effect=failure):
+            response = await client.get(
+                "/network/discoveries/inspect", params={"identifier": observation.identifier}
+            )
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UNSUPPORTED_DESCRIPTION_FORMAT"
+    assert response.json()["error"]["raw_response"] == "status=ok"
