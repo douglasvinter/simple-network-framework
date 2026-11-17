@@ -9,10 +9,11 @@ Application: async for event in engine.discover()
                          │
                   DiscoveryEngine
                          │
-           ┌─────────────┼─────────────┐
-           │             │             │
-       SSDP pump      mDNS pump      BLE / SLP pumps
-           └─────────────┼─────────────┘
+      ┌──────────┬───────┴───────┬──────────┐
+      │          │               │          │
+  SSDP pump   mDNS pump       BLE pump   OpenSLP pump
+      │          │               │          │
+      └──────────┴───────┬───────┴──────────┘
                          │
                    asyncio.Queue
                          │
