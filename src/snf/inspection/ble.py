@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 from snf.models import DiscoveryObservation
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class BLEInspectionError(ValueError):
@@ -74,6 +77,7 @@ class BLEInspector:
                     for service in client.services
                 )
         except (BleakError, OSError, TimeoutError) as exc:
+            _LOGGER.exception("BLE GATT inspection failed for %s", observation.identifier)
             raise BLEInspectionError(
                 "BLE GATT service enumeration failed", code="CONNECTION_FAILED"
             ) from exc
