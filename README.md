@@ -9,14 +9,19 @@ an in-memory inventory, and an entry-point plugin system.
 
 ## Scope
 
-SNF discovers devices and the services/endpoints they advertise. It does not pair
-Bluetooth devices, connect to devices, invoke device APIs, control TVs or appliances,
-or implement automation workflows. Those responsibilities belong to consuming
-applications such as a home-automation project.
+SNF currently provides concurrent protocol discovery, normalized observations, a live
+inventory, an embeddable background runtime, and an optional REST/SSE API.
+Discovery records are protocol-scoped evidence, not a correlated physical-device
+inventory. The `/network/discoveries/map` endpoint groups raw observations by
+protocol and identifier; it does **not** merge devices by IP, name, or BLE address.
 
-Discovery identity is protocol-scoped. If SSDP and mDNS report the same physical TV,
-SNF currently keeps separate records. It deliberately does not guess that two
-observations represent the same physical device.
+Protocol inspection, evidence-based entity resolution, and generic protocol
+interactions are planned separately. Vendor-specific commands and automation
+workflows remain responsibilities of consuming applications.
+
+See [Architecture](docs/architecture.md) for the implemented design and
+[Architecture Decision Record](docs/adr-python-first-network-framework.md) for
+the target direction and trade-offs.
 
 ## Requirements
 
@@ -31,7 +36,7 @@ observations represent the same physical device.
 python -m pip install 'simple-network-framework[all]'
 ```
 
-This installs the framework and its SSDP, mDNS, and BLE backends. SLP has an additional
+This installs the framework, its SSDP, mDNS, and BLE backends, and the optional HTTP API dependencies (FastAPI, SSE and Uvicorn). SLP has an additional
 native dependency: the OpenSLP `slptool` executable must be installed separately
 and available on `PATH`. OpenSLP is not a Python package, and availability and
 installation steps vary by operating system.
@@ -321,3 +326,75 @@ Discovery data is untrusted input. SNF does not automatically fetch SSDP LOCATIO
 URLs, connect to discovered devices, or invoke discovered services. Applications
 must validate destinations and enforce their own network access policy before
 making follow-up requests.
+
+## Embedded background runtime and optional HTTP API
+
+`NetworkRuntime` owns one background consumer of `DiscoveryEngine.discover()`, maintains the
+same live observation snapshot, and fans out future-only events to bounded independent
+subscribers. It does not merge protocol identities or inspect advertised services.
+
+```python
+import asyncio
+from snf import NetworkRuntime
+
+
+async def main():
+    async with NetworkRuntime() as network:
+        print(network.snapshot())
+        subscription = network.subscribe()
+        try:
+            async for event in subscription:
+                print(event.state, event.observation)
+        finally:
+            subscription.close()
+
+
+asyncio.run(main())
+```
+
+Install the optional HTTP adapter with `pip install "simple-network-framework[api]"`.
+It never starts a server on import; mount it in your own FastAPI application:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from snf import NetworkRuntime
+from snf.api import create_router
+
+network = NetworkRuntime()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with network:
+        yield
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(create_router(network), prefix="/network")
+```
+
+The adapter exposes `GET /network/discoveries`, `/network/discoveries/map`,
+`/network/discoveries/events` (SSE), and `/network/health`.
+Health includes an ISO-8601 UTC `timestamp` generated for each request, status,
+discovery_running, observation count and configured protocols. A completed discovery
+stream is reported as degraded even if its last observations remain available.
+SSE subscribers receive only future events; slow subscribers are disconnected.
+No replay or durable delivery is promised. HTTP exposure should be protected
+appropriately; use localhost by default.
+
+### Run the optional HTTP API locally
+
+The `api` extra includes FastAPI, SSE support and Uvicorn; `all` also includes
+these dependencies alongside the protocol backends. Neither extra starts a server
+on import. From the repository root:
+
+```bash
+python -m pip install -e ".[all,dev]"
+python -m uvicorn examples.run_api:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for interactive OpenAPI documentation or
+`http://127.0.0.1:8000/network/health` for the runtime health response.
+The example binds to localhost intentionally; protect inventory endpoints before
+exposing them beyond your machine.

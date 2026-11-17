@@ -30,9 +30,7 @@ async def test_real_slp_adapter_and_engine_with_mocked_subprocess(monkeypatch):
         if command[-1] == "findsrvtypes":
             return FakeProcess(b"service:printer\n")
         if command[-2:] == ("findsrvs", "service:printer"):
-            return FakeProcess(
-                b"service:printer://printer.local:9100/queue,600\n"
-            )
+            return FakeProcess(b"service:printer://printer.local:9100/queue,600\n")
         raise AssertionError(f"Unexpected slptool command: {command!r}")
 
     monkeypatch.setattr("snf.adapters.slp.shutil.which", lambda command: "/mock/slptool")

@@ -30,8 +30,7 @@ class SSDPPlugin:
             raise ValueError("search_timeout must be between 1 and 120 seconds")
         if find_spec("async_upnp_client") is None:
             raise ImportError(
-                "Install SSDP support with: "
-                "pip install 'simple-network-framework[ssdp]'"
+                "Install SSDP support with: pip install 'simple-network-framework[ssdp]'"
             )
         self.search_target = search_target
         self.search_interval = search_interval

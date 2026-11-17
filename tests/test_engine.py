@@ -20,17 +20,21 @@ class FakePlugin:
     def __init__(self, events=None):
         self.started = False
         self.stopped = False
-        self.events = events if events is not None else [
-            DiscoveryEvent(
-                DiscoveryState.ADDED,
-                DiscoveryObservation(
-                    protocol=self.name,
-                    identifier="device-1",
-                    name="test",
-                    endpoints=(Endpoint("ip", "127.0.0.1"),),
-                ),
-            )
-        ]
+        self.events = (
+            events
+            if events is not None
+            else [
+                DiscoveryEvent(
+                    DiscoveryState.ADDED,
+                    DiscoveryObservation(
+                        protocol=self.name,
+                        identifier="device-1",
+                        name="test",
+                        endpoints=(Endpoint("ip", "127.0.0.1"),),
+                    ),
+                )
+            ]
+        )
 
     async def start(self):
         self.started = True
@@ -120,10 +124,12 @@ async def test_engine_suppresses_duplicate_announcements_and_updates_inventory()
         name="Living room TV",
         endpoints=(Endpoint("ip", "192.0.2.10", 1400),),
     )
-    plugin = FakePlugin([
-        DiscoveryEvent(DiscoveryState.ADDED, device),
-        DiscoveryEvent(DiscoveryState.ADDED, device),
-    ])
+    plugin = FakePlugin(
+        [
+            DiscoveryEvent(DiscoveryState.ADDED, device),
+            DiscoveryEvent(DiscoveryState.ADDED, device),
+        ]
+    )
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         events = [event async for event in engine.discover()]
         assert engine.get_observation("ssdp", "uuid:device-1") == device
@@ -139,15 +145,15 @@ async def test_engine_emits_update_when_device_changes():
     changed = DiscoveryObservation(
         "ssdp", "uuid:device-1", "TV", (Endpoint("ip", "192.0.2.11", 1400),)
     )
-    plugin = FakePlugin([
-        DiscoveryEvent(DiscoveryState.ADDED, initial),
-        DiscoveryEvent(DiscoveryState.ADDED, changed),
-    ])
+    plugin = FakePlugin(
+        [
+            DiscoveryEvent(DiscoveryState.ADDED, initial),
+            DiscoveryEvent(DiscoveryState.ADDED, changed),
+        ]
+    )
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         events = [event async for event in engine.discover()]
-    assert [event.state for event in events] == [
-        DiscoveryState.ADDED, DiscoveryState.UPDATED
-    ]
+    assert [event.state for event in events] == [DiscoveryState.ADDED, DiscoveryState.UPDATED]
     assert events[1].observation.endpoints[0].address == "192.0.2.11"
 
 
@@ -231,10 +237,12 @@ def test_registry_snapshot_filters_protocol_without_changing_inventory():
 async def test_engine_snapshot_filters_protocol_and_preserves_devices_property():
     mdns = DiscoveryObservation("mdns", "one", "Printer")
     ssdp = DiscoveryObservation("ssdp", "two", "TV")
-    plugin = FakePlugin([
-        DiscoveryEvent(DiscoveryState.ADDED, mdns),
-        DiscoveryEvent(DiscoveryState.ADDED, ssdp),
-    ])
+    plugin = FakePlugin(
+        [
+            DiscoveryEvent(DiscoveryState.ADDED, mdns),
+            DiscoveryEvent(DiscoveryState.ADDED, ssdp),
+        ]
+    )
 
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         _ = [event async for event in engine.discover()]

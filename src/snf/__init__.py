@@ -12,6 +12,7 @@ from snf.models import (
 )
 from snf.plugins import DiscoveryPlugin, create_plugins, load_plugins
 from snf.registry import ObservationRegistry
+from snf.runtime import DiscoverySubscription, NetworkRuntime
 from snf.storage import InMemoryStorage, ObservationStorage
 
 # Library logging is configured by the consuming application.
@@ -20,6 +21,8 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "DiscoveryObservation",
     "ObservationRegistry",
+    "NetworkRuntime",
+    "DiscoverySubscription",
     "DiscoveryEngine",
     "DiscoveryEvent",
     "DiscoveryPlugin",

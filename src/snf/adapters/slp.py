@@ -59,9 +59,7 @@ class SLPPlugin:
             raise TimeoutError(f"SLP command timed out: {' '.join(command)}") from exc
         if process.returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
-            raise RuntimeError(
-                f"OpenSLP command failed ({process.returncode}): {detail}"
-            )
+            raise RuntimeError(f"OpenSLP command failed ({process.returncode}): {detail}")
         return [
             line.strip()
             for line in stdout.decode("utf-8", errors="replace").splitlines()
@@ -84,20 +82,22 @@ class SLPPlugin:
         prefix, separator, endpoint_value = value.partition("://")
         if not separator:
             return DiscoveryObservation(
-                protocol="slp", identifier=value, name=value,
+                protocol="slp",
+                identifier=value,
+                name=value,
                 metadata={"url": value, "lifetime": lifetime},
             )
         service_type = prefix.removeprefix("service:")
         parsed = urlsplit(f"slp://{endpoint_value}")
-        endpoints = (
-            (Endpoint("ip", parsed.hostname, parsed.port),) if parsed.hostname else ()
-        )
-        service = Service(
-            name=value, service_type=service_type or None, endpoints=endpoints
-        )
+        endpoints = (Endpoint("ip", parsed.hostname, parsed.port),) if parsed.hostname else ()
+        service = Service(name=value, service_type=service_type or None, endpoints=endpoints)
         return DiscoveryObservation(
-            protocol="slp", identifier=value, name=value, endpoints=endpoints,
-            services=(service,), metadata={"url": value, "lifetime": lifetime},
+            protocol="slp",
+            identifier=value,
+            name=value,
+            endpoints=endpoints,
+            services=(service,),
+            metadata={"url": value, "lifetime": lifetime},
         )
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
@@ -116,9 +116,7 @@ class SLPPlugin:
                     if service_url in self._seen:
                         continue
                     self._seen.add(service_url)
-                    yield DiscoveryEvent(
-                        DiscoveryState.ADDED, self._to_device(service_url)
-                    )
+                    yield DiscoveryEvent(DiscoveryState.ADDED, self._to_device(service_url))
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)

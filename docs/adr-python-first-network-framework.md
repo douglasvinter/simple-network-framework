@@ -1,6 +1,6 @@
 # ADR: Python-first network framework and optional HTTP adapter
 
-**Status:** Proposed — review before implementation  
+**Status:** Accepted — incremental implementation in progress  
 **Scope:** SNF architecture and consolidation of reusable networking capabilities  
 **Date:** 2026-11-16
 
@@ -61,41 +61,15 @@ A convenience application factory may also be provided. The host owns runtime st
 - Document ordering and event types; avoid claiming delivery durability or replay.
 - Do not conflate `REMOVED` observation events with proof that physical hardware is offline.
 
-### Discovery, inspection, and interaction: distinct responsibilities
+### Discovery, inspection, and interaction
 
-**Discovery observations are inputs to SNF's inventory, not its final product.** The framework must enrich protocol advertisements into an inventory of network entities, advertised services, supported protocol capabilities, endpoints, identity evidence, and inspection state. Three operations have distinct contracts and lifecycle:
+1. **Discovery:** collect advertisements and locators without treating them as verified or actionable.
+2. **Inspection:** optionally retrieve and parse supported service descriptions, with provenance, timeouts, bounded responses, safe parsing, and target/redirect validation.
+3. **Interaction:** explicitly invoke supported protocol operations; inspection must not implicitly pair, write, or control devices.
 
-1. **Discovery:** observe announcements, advertisements, and service locators without assuming they are verified, reachable, or controllable.
-2. **Inspection / resolution:** fetch or query supported protocol descriptions, enumerate services/capabilities, and enrich inventory with provenance and inspection status. Inspection is a first-class SNF capability, not vendor application logic.
-3. **Interaction:** explicitly consume supported services, invoke standardized actions, read/write characteristics, connect/disconnect, and pair/unpair where supported. Inspection does not itself authorize state-changing operations.
+Planned inspectors include UPnP device/SCPD descriptions, opt-in BLE GATT enumeration, Bluetooth Classic SDP/profiles, and supported service metadata for mDNS/SLP. Bluetooth Classic needs a separate backend from Bleak BLE scanning. Audio-profile awareness is in scope; implementing an audio codec/streaming engine is not. Platform capabilities vary: unsupported operations must fail explicitly.
 
-**SSDP / UPnP enrichment:** When an SSDP observation supplies a `LOCATION` URL, a configured inspector may retrieve the UPnP device description XML; parse UDN, device type, manufacturer, model, embedded devices, service types, service IDs, and description/control/event URLs; resolve SCPD descriptions to learn actions, arguments, and state variables; and place these structured capabilities in the SNF inventory. Service control remains an explicit operation. Preserve the raw advertisement and the source URL as evidence, not as a trusted identity or unrestricted request destination. Apply URL/redirect validation, local-network targeting policy, request timeouts, bounded response sizes, safe XML parsing, and appropriate caching/retries.
-
-**BLE / GATT enrichment:** BLE advertisements identify candidate peripherals, not their full capabilities. When explicitly requested or permitted by an inspection policy, a supported BLE backend may connect, enumerate GATT services, characteristics, descriptors and properties, and read appropriate standard characteristics (for example, Device Information Service). Record UUIDs, characteristic properties, observed values where safe, inspection status, and provenance in SNF inventory. Reads may require authentication and can have device-specific side effects; do not automatically pair, write, subscribe to notifications, or assume every peripheral can be inspected. Connections must have bounded concurrency, timeouts, and reliable cleanup. BLE identity may be unstable because of privacy address rotation.
-
-**Bluetooth Classic / BR/EDR (including audio devices):** SNF must also support Bluetooth Classic independently of BLE. Discovery should enumerate discoverable BR/EDR devices through a supported OS/backend, and inspection should use SDP or platform-provided service/profile information to identify advertised capabilities (for example, A2DP, AVRCP, HFP/HSP when exposed). SNF's inventory must distinguish Classic, BLE, and dual-mode observations and retain provenance without assuming a shared MAC address always proves stable physical identity. Generic pairing/unpairing, trust/bond state, connection/disconnection, and profile/service availability belong in SNF when supported by the host OS/backend. Platform support varies across Windows, Linux, and macOS; expose supported operations and explicit unsupported errors rather than promise uniform behavior. For audio, SNF should inspect and manage available profiles/devices using the OS Bluetooth/audio stack; **implementing an A2DP audio codec/streaming engine or vendor-specific media behavior is not an SNF requirement**. Do not assume that BLE's Bleak backend supports Classic discovery or audio profiles.
-
-**Other discovery protocols:** mDNS/DNS-SD and OpenSLP can provide service types, endpoints, and metadata; protocol-specific inspectors may enrich services when a supported description or interrogation mechanism exists. Do not pretend the discovery protocol itself defines universal service actions or pairing.
-
-**Inventory projection (conceptual, not an implemented schema):**
-
-```text
-NetworkEntity
-  identity / correlation evidence
-  protocol observations (raw evidence and lifecycle)
-  manufacturer / model (when learned)
-  endpoints
-  services
-    service type / source / description
-    supported standardized actions or GATT characteristics
-    required access and operation support
-  inspection status / errors / last inspection
-  availability evidence (not proof of physical online state)
-```
-
-Maintain distinct states for discovery, inspection, and interaction. Inspection failures must not erase valid discovery observations or be confused with device removal. Cache invalidation, reinspection, stale capabilities, and restart reconciliation need explicit semantics. SNF must expose the enriched inventory to Python clients and, optionally, read-only HTTP endpoints; the current `DiscoveryObservation` model remains available unchanged until a deliberate migration.
-
-**Framework/application boundary:** SNF understands UPnP actions, BLE GATT characteristics, Bluetooth Classic SDP/profiles, generic protocol operations, and capability metadata. Consuming applications interpret vendor/model-specific semantics, including proprietary payloads, app launching, and appliance workflows. A writable characteristic or advertised action is not proof of a universally meaningful device command.
+Keep discovery, inspection, and interaction states separate. Inspection failures must not erase valid observations. A future enriched entity projection may include identity evidence, services, endpoints, capabilities, and inspection status; its schema is not implemented.
 
 ### Identity and entity resolution (subsequent phase)
 
@@ -107,21 +81,9 @@ Keep raw `DiscoveryObservation` records as protocol evidence. Add a separate net
 - No cryptographic claim should be implied by a field named `verified` unless actual verification exists.
 - Identity resolution must be testable without FastAPI and without a database.
 
-### Network interactions and capability contracts (subsequent phases)
+### Generic interaction (subsequent phases)
 
-Discovery is not the framework's final boundary. SNF will expose **generic network interaction APIs** through Python and, where appropriate, its optional HTTP adapter:
-
-- **Service consumption:** resolve an advertised service, open a protocol-supported interaction, send requests or invoke standardized operations, and return protocol-level responses/errors. A discovered service is not automatically callable; adapters must advertise supported operations.
-- **Connections and sessions:** explicit connect/disconnect and session lifecycle management where the underlying protocol or library supports it, including timeouts, cancellation, cleanup, and failure reporting.
-- **Pairing and unpairing:** explicit operations for protocols/backends that provide them (for example, BLE or Bluetooth Classic pairing via a suitable OS backend). Pairing is not a universal concept for SSDP, mDNS, or OpenSLP, and must not be fabricated as one.
-- **Capability discovery:** describe which operations an adapter actually supports, including platform-dependent or unavailable operations. Unsupported operations must fail explicitly rather than silently succeeding.
-- **Python-first and HTTP parity:** supported generic operations are callable from Python without FastAPI; HTTP routes may expose selected operations using the same services, not separate implementations.
-
-**Interaction operations must be explicit and opt-in.** Discovery or a read-only inventory request must never implicitly pair, unpair, authenticate, open sessions, or invoke a device command. Connection and pairing APIs require clear authorization and security boundaries; exposing them over HTTP requires authentication/authorization, input validation, and conservative network binding. Do not expose an unrestricted arbitrary-target request proxy or command executor.
-
-**Vendor boundary:** SNF can invoke a standardized UPnP action, communicate with a supported generic protocol service, or pair a Bluetooth device. A consuming application interprets the device's vendor/model-specific semantics (for example, launching an app on a particular TV, selecting an air-conditioner mode, or handling proprietary authentication). Generic protocol support does not imply SNF implements every vendor command.
-
-These are **planned contracts**, not implemented functionality. Design each interaction API against real adapter/backend capabilities rather than assuming every discovered service is controllable.
+SNF will expose supported protocol-level service operations, connections/sessions, and pairing/unpairing where the backend permits. These must be explicit, opt-in, cancellable, and bounded by timeouts and authorization. Pairing is not a universal operation across discovery protocols. Python remains the primary API; HTTP may expose selected operations through the same services, with authentication and input validation. Never provide an unrestricted arbitrary-target proxy. Vendor/model-specific commands and automation stay in consuming applications.
 
 ### Storage
 
@@ -148,26 +110,20 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 ## Implementation sequence
 
-1. **Architecture review (this ADR):** agree on boundaries, ownership, event and lifecycle contracts.
-2. **Consolidation PR:** implement the reusable background runtime, subscriber fan-out, service projection, and HTTP schemas/routes in SNF. Preserve behavior; do not implement correlation or SQL in this PR.
-3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration; Bluetooth Classic SDP/profile inspection), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
-4. **Persistence PR:** explicit durable-inventory and reconciliation contracts; add SQLite only after contract tests.
-5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and BLE/Classic pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls. Bluetooth Classic discovery and audio-profile awareness require a backend separate from BLE-only scanning.
-6. **Real-device validation:** SSDP LOCATION/SCPD enrichment, BLE GATT inspection, Bluetooth Classic discovery/SDP/audio-profile detection, mDNS, OpenSLP, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
-7. **Integration and release readiness:** validate Python and HTTP contracts with independent consumers and real devices before considering a stable package release.
+1. Review architecture and contracts (this ADR).
+2. Implement single-consumer runtime, event subscriptions, and optional read-only HTTP adapter (PR #8).
+3. Add inspection and evidence-based entity resolution in focused PRs.
+4. Define durable entity/reconciliation contracts before choosing SQLite.
+5. Add supported generic interactions, pairing and Bluetooth Classic separately.
+6. Validate against real devices, restarts, failures and multiple clients before release.
 
 ## Acceptance criteria for consolidation
 
-- Direct Python usage works without installing HTTP dependencies.
-- Optional FastAPI router uses the same runtime and live inventory as Python callers.
-- Only one discovery-consumer task exists per runtime; multiple SSE subscribers do not duplicate discovery.
-- Existing SNF protocol tests and new REST/SSE contract tests pass.
-- Event fan-out handles slow clients, disconnects, cancellation, and shutdown.
-- API import has no startup/network side effects.
-- `py.typed` and strict typing checks are considered for published Python consumers.
-- Documentation and examples cover embedding in an existing application.
-- No home-automation-specific classes or dependency on a consuming application are introduced.
-- Generic interaction and pairing contracts are explicitly deferred from the consolidation PR, but remain part of SNF's planned scope.
+- Python usage works without HTTP dependencies; optional HTTP shares the same runtime and inventory.
+- Exactly one engine consumer per runtime; bounded subscribers cannot block discovery.
+- Cancellation, shutdown, slow clients and API import side effects are tested.
+- Existing protocol and new HTTP tests pass; documentation and examples cover embedding.
+- No vendor-specific automation or premature correlation/persistence in PR #8.
 
 ## Alternatives considered
 
@@ -180,4 +136,4 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 ## Consequences and risks
 
-The framework becomes more capable and owns more lifecycle complexity, including explicit connection and pairing state in future phases. The implementation must avoid double consumption, unsafe correlation, unbounded queues, blocking slow subscribers, and accidental HTTP exposure. The existing discovery-centric design document and developer guide must be revised after this ADR is accepted; until then, they describe the current implementation rather than the target architecture.
+The framework becomes more capable and owns more lifecycle complexity, including explicit connection and pairing state in future phases. The implementation must avoid double consumption, unsafe correlation, unbounded queues, blocking slow subscribers, and accidental HTTP exposure. The current implementation is documented separately in [Architecture](architecture.md) and the [Developer Guide](developer-guide.md). This ADR remains the record of the target architecture; planned capabilities must not be mistaken for shipped features.

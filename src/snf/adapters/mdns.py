@@ -13,19 +13,44 @@ from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, End
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_SERVICE_TYPES = [
-    "_airplay._tcp.local.", "_raop._tcp.local.", "_googlecast._tcp.local.",
-    "_spotify-connect._tcp.local.", "_sonos._tcp.local.", "_mediaremotetv._tcp.local.",
-    "_daap._tcp.local.", "_dpap._tcp.local.", "_roon._tcp.local.",
-    "_plexmediasvr._tcp.local.", "_hap._tcp.local.", "_homekit._tcp.local.",
-    "_matter._tcp.local.", "_matterc._udp.local.", "_hue._tcp.local.",
-    "_esphomelib._tcp.local.", "_mqtt._tcp.local.", "_home-assistant._tcp.local.",
-    "_wled._tcp.local.", "_shelly._tcp.local.", "_ipp._tcp.local.",
-    "_ipps._tcp.local.", "_printer._tcp.local.", "_pdl-datastream._tcp.local.",
-    "_scanner._tcp.local.", "_uscan._tcp.local.", "_uscans._tcp.local.",
-    "_smb._tcp.local.", "_afpovertcp._tcp.local.", "_nfs._tcp.local.",
-    "_sftp-ssh._tcp.local.", "_ssh._tcp.local.", "_rfb._tcp.local.",
-    "_http._tcp.local.", "_https._tcp.local.", "_workstation._tcp.local.",
-    "_device-info._tcp.local.", "_occam._udp.local.",
+    "_airplay._tcp.local.",
+    "_raop._tcp.local.",
+    "_googlecast._tcp.local.",
+    "_spotify-connect._tcp.local.",
+    "_sonos._tcp.local.",
+    "_mediaremotetv._tcp.local.",
+    "_daap._tcp.local.",
+    "_dpap._tcp.local.",
+    "_roon._tcp.local.",
+    "_plexmediasvr._tcp.local.",
+    "_hap._tcp.local.",
+    "_homekit._tcp.local.",
+    "_matter._tcp.local.",
+    "_matterc._udp.local.",
+    "_hue._tcp.local.",
+    "_esphomelib._tcp.local.",
+    "_mqtt._tcp.local.",
+    "_home-assistant._tcp.local.",
+    "_wled._tcp.local.",
+    "_shelly._tcp.local.",
+    "_ipp._tcp.local.",
+    "_ipps._tcp.local.",
+    "_printer._tcp.local.",
+    "_pdl-datastream._tcp.local.",
+    "_scanner._tcp.local.",
+    "_uscan._tcp.local.",
+    "_uscans._tcp.local.",
+    "_smb._tcp.local.",
+    "_afpovertcp._tcp.local.",
+    "_nfs._tcp.local.",
+    "_sftp-ssh._tcp.local.",
+    "_ssh._tcp.local.",
+    "_rfb._tcp.local.",
+    "_http._tcp.local.",
+    "_https._tcp.local.",
+    "_workstation._tcp.local.",
+    "_device-info._tcp.local.",
+    "_occam._udp.local.",
 ]
 
 # Backward-compatible name retained for existing examples and integrations.
@@ -47,8 +72,7 @@ class MDNSPlugin:
     ) -> None:
         if find_spec("zeroconf") is None:
             raise ImportError(
-                "Install mDNS support with: "
-                "pip install 'simple-network-framework[mdns]'"
+                "Install mDNS support with: pip install 'simple-network-framework[mdns]'"
             )
         self.service_types = service_types
         self.resolve_timeout = resolve_timeout
@@ -114,8 +138,7 @@ class MDNSPlugin:
             return
 
         properties = {
-            (key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)):
-            (
+            (key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)): (
                 value.decode("utf-8", errors="replace")
                 if isinstance(value, bytes)
                 else ("" if value is None else str(value))
