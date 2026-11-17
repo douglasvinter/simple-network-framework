@@ -8,6 +8,7 @@ from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("snf-debug.log", encoding="utf-8")],
 )
 logging.getLogger("snf").setLevel(logging.DEBUG)
 

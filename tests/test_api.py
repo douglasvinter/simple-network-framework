@@ -40,6 +40,7 @@ async def test_http_routes_and_utc_health_timestamp():
         "/network/discoveries",
         "/network/discoveries/map",
         "/network/discoveries/events",
+        "/network/discoveries/inspect/ble",
         "/network/discoveries/inspect/mdns",
         "/network/discoveries/inspect/upnp",
         "/network/health",
