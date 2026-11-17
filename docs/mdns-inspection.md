@@ -20,3 +20,14 @@ this is a presentation representation, not lossless binary preservation.
 
 A service instance is not a physical-device identifier. The inspector does not
 infer manufacturer, model, or cross-protocol identity from TXT attributes.
+
+## HTTP API
+
+`GET /network/discoveries/inspect/mdns?identifier=<observation-identifier>`
+
+Success returns the resolved service instance fields and `"error": {}`.
+Application-level errors return `{"service": null, "error": {"code": "...",
+"message": "...", "raw_response": null}}`. Missing identifiers and invalid
+observations return 422, unknown identifiers return 404, unavailable runtime
+returns 503, and resolution failures return 502. The existing SSDP inspection
+endpoint remains unchanged.
