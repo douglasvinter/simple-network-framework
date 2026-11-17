@@ -18,6 +18,7 @@ from snf.api.schemas import (
     UPnPDeviceResponse,
 )
 from snf.entities import NetworkEntity
+from snf.inspection.ssdp_metadata import SSDPMetadataParser
 from snf.inspection.upnp import UPnPInspector, UPnPInspectionError
 from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
@@ -32,36 +33,12 @@ class HealthResponse(BaseModel):
 
 
 def _advertised_device(observation: DiscoveryObservation) -> UPnPDeviceResponse:
-    """Conservative SSDP identity fallback; never infer physical-device identity."""
-    udn = observation.metadata.get("udn")
-    if not isinstance(udn, str) or not udn.startswith("uuid:"):
-        usn = observation.metadata.get("usn")
-        udn = usn.split("::", 1)[0] if isinstance(usn, str) and usn.startswith("uuid:") else None
-
-    # SSDP ST may describe a device, service, UUID, or ssdp:all. Only a
-    # device-type URN is semantically equivalent to UPnP device_type.
-    device_type = next((
-        service.service_type
-        for service in observation.services
-        if isinstance(service.service_type, str)
-        and ":device:" in service.service_type.lower()
-        and service.service_type.lower().startswith("urn:")
-    ), None)
-
-    # The SSDP adapter's observation.name is SERVER or ST, neither of which
-    # is a friendly name. Only an explicitly advertised friendlyName is safe.
-    friendly_name = next((
-        value.strip()
-        for service in observation.services
-        for key, value in service.metadata.items()
-        if str(key).lower() in {"friendlyname", "friendly-name"}
-        and isinstance(value, str) and value.strip()
-    ), None)
-
+    """Translate SSDP identity evidence into the API's fallback device."""
+    metadata = SSDPMetadataParser().parse(observation)
     return UPnPDeviceResponse(
-        udn=udn,
-        device_type=device_type,
-        friendly_name=friendly_name,
+        udn=metadata.udn,
+        device_type=metadata.device_type,
+        friendly_name=metadata.friendly_name,
         manufacturer=None,
         model_name=None,
         model_number=None,
