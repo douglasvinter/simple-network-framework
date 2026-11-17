@@ -373,3 +373,19 @@ stream is reported as degraded even if its last observations remain available.
 SSE subscribers receive only future events; slow subscribers are disconnected.
 No replay or durable delivery is promised. HTTP exposure should be protected
 appropriately; use localhost by default.
+
+### Run the optional HTTP API locally
+
+The `api` extra includes FastAPI, SSE support and Uvicorn; `all` also includes
+these dependencies alongside the protocol backends. Neither extra starts a server
+on import. From the repository root:
+
+```bash
+python -m pip install -e ".[all,dev]"
+python -m uvicorn examples.run_api:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for interactive OpenAPI documentation or
+`http://127.0.0.1:8000/network/health` for the runtime health response.
+The example binds to localhost intentionally; protect inventory endpoints before
+exposing them beyond your machine.
