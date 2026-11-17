@@ -104,3 +104,27 @@ class MDNSInspectionResponse(BaseModel):
 class MDNSInspectionErrorResponse(BaseModel):
     service: MDNSInspectionResponse | None = None
     error: InspectionErrorDetail
+
+
+class BLECharacteristicResponse(BaseModel):
+    uuid: str
+    properties: tuple[str, ...]
+    descriptors: tuple[str, ...]
+
+
+class BLEServiceResponse(BaseModel):
+    uuid: str
+    characteristics: tuple[BLECharacteristicResponse, ...]
+
+
+class BLEInspectionResponse(BaseModel):
+    """GATT metadata, not characteristic values or physical-device identity."""
+
+    identifier: str
+    services: tuple[BLEServiceResponse, ...]
+    error: dict[str, str] = Field(default_factory=dict)
+
+
+class BLEInspectionErrorResponse(BaseModel):
+    device: BLEInspectionResponse | None = None
+    error: InspectionErrorDetail
