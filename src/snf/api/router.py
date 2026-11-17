@@ -19,7 +19,7 @@ from snf.api.schemas import (
 )
 from snf.entities import NetworkEntity
 from snf.inspection.ssdp_metadata import SSDPMetadataParser
-from snf.inspection.upnp import UPnPInspector, UPnPInspectionError
+from snf.inspection.upnp import UPnPInspectionError, UPnPInspector
 from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
 
