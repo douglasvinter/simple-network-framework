@@ -53,6 +53,8 @@ async def test_http_inspection_end_to_end_and_error_isolation():
         assert failure.status_code == 502
         assert failure.json()["error"]["message"] == "invalid description"
         assert failure.json()["error"]["code"] == "INSPECTION_FAILED"
+        assert failure.json()["device"]["udn"] is None
+        assert failure.json()["device"]["friendly_name"] is None
         assert runtime.snapshot() == (observation,)
 
 
@@ -89,3 +91,43 @@ async def test_plain_text_response_error_contains_raw_evidence():
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "UNSUPPORTED_DESCRIPTION_FORMAT"
     assert response.json()["error"]["raw_response"] == "status=ok"
+    assert response.json()["device"] == {
+        "udn": "uuid:SSTVKSF1==0000000000000005297130",
+        "device_type": None,
+        "friendly_name": None,
+        "manufacturer": None,
+        "model_name": None,
+        "model_number": None,
+        "services": [],
+        "embedded_devices": [],
+    }
+
+
+
+@pytest.mark.asyncio
+async def test_failure_uses_only_semantically_valid_ssdp_metadata():
+    from snf.models import Service
+
+    observation = DiscoveryObservation(
+        "ssdp", "uuid:device::urn:schemas-upnp-org:device:MediaRenderer:1",
+        "Linux/1.0 UPnP/1.1",  # SERVER is not a friendly name.
+        metadata={"udn": "uuid:device"},
+        services=(Service(
+            name="MediaRenderer",
+            service_type="urn:schemas-upnp-org:device:MediaRenderer:1",
+            metadata={"friendlyName": "Living Room TV", "server": "Linux/1.0"},
+        ),),
+    )
+    app = FastAPI()
+    app.include_router(create_router(SnapshotRuntime([observation])), prefix="/network")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
+                   side_effect=UPnPInspectionError("bad description")):
+            response = await client.get(
+                "/network/discoveries/inspect", params={"identifier": observation.identifier}
+            )
+    assert response.status_code == 502
+    assert response.json()["device"]["udn"] == "uuid:device"
+    assert response.json()["device"]["device_type"] == "urn:schemas-upnp-org:device:MediaRenderer:1"
+    assert response.json()["device"]["friendly_name"] == "Living Room TV"
+    assert response.json()["device"]["services"] == []

@@ -81,4 +81,5 @@ class InspectionErrorDetail(BaseModel):
 
 
 class InspectionErrorResponse(BaseModel):
+    device: UPnPDeviceResponse
     error: InspectionErrorDetail

@@ -39,3 +39,12 @@ originating SSDP observation IP; ports may differ. All DNS answers must match,
 and the vetted addresses remain pinned for HTTP. Direct `inspect(location)`
 retains private-address restrictions but has no originating SSDP source to
 compare. Failed inspections do not change discovery state.
+
+On failed inspection the response also contains a `device` object with the
+same fields as a successful description, populated conservatively from the
+original SSDP advertisement. `udn` comes from the advertised UUID/USN,
+`device_type` only from an advertised device-type URN, and `friendly_name`
+only from an explicit friendly-name header. The SSDP `SERVER` header is
+**not** a friendly name; missing fields remain null, and services/embedded
+devices are empty because no UPnP description was parsed. The fallback
+represents the advertisement, not a verified physical-device identity.
