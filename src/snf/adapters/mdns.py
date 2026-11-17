@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any
 
-from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, Endpoint, Service
 
 _LOGGER = logging.getLogger(__name__)
 
