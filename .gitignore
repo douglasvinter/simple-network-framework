@@ -1,0 +1,10 @@
+# Example runtime logs
+snf-debug.log
+
+# Python caches and local environments
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+*.py[cod]
