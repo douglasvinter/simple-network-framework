@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Request
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+\nfrom fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from snf.api.schemas import DiscoveryObservationResponse
+from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
 
 
@@ -30,15 +32,20 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/discoveries", response_model=list[DiscoveryObservationResponse])
-    def discoveries(protocol: str | None = None) -> tuple:
+    def discoveries(protocol: str | None = None) -> tuple[DiscoveryObservation, ...]:
         validate(protocol)
         try:
             return runtime.snapshot(protocol=protocol)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    @router.get("/discoveries/map", response_model=dict[str, dict[str, DiscoveryObservationResponse]])
-    def discovery_map(protocol: str | None = None) -> dict:
+    @router.get(
+        "/discoveries/map",
+        response_model=dict[str, dict[str, DiscoveryObservationResponse]],
+    )
+    def discovery_map(
+        protocol: str | None = None,
+    ) -> dict[str, dict[str, DiscoveryObservation]]:
         validate(protocol)
         try:
             return runtime.observation_map(protocol=protocol)
@@ -53,7 +60,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-        async def serialize():
+        async def serialize() -> AsyncIterator[ServerSentEvent]:
             try:
                 async for event in subscription:
                     if await request.is_disconnected():
@@ -66,7 +73,8 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
                 subscription.close()
 
         return EventSourceResponse(
-            serialize(), ping=15,
+            serialize(),
+            ping=15,
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
@@ -79,7 +87,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             count = 0
         return HealthResponse(
             status="ok" if running else "degraded",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             discovery_running=running,
             observations=count,
             protocols=runtime.protocols,

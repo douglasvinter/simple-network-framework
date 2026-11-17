@@ -112,7 +112,10 @@ class NetworkRuntime:
 
     def _publish(self, event: DiscoveryEvent) -> None:
         for subscriber in tuple(self._subscribers):
-            if subscriber.protocol is not None and subscriber.protocol != event.observation.protocol:
+            if (
+                subscriber.protocol is not None
+                and subscriber.protocol != event.observation.protocol
+            ):
                 continue
             try:
                 subscriber._queue.put_nowait(event)
