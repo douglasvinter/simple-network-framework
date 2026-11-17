@@ -337,6 +337,7 @@ subscribers. It does not merge protocol identities or inspect advertised service
 import asyncio
 from snf import NetworkRuntime
 
+
 async def main():
     async with NetworkRuntime() as network:
         print(network.snapshot())
@@ -346,6 +347,7 @@ async def main():
                 print(event.state, event.observation)
         finally:
             subscription.close()
+
 
 asyncio.run(main())
 ```
@@ -361,10 +363,12 @@ from snf.api import create_router
 
 network = NetworkRuntime()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with network:
         yield
+
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(create_router(network), prefix="/network")

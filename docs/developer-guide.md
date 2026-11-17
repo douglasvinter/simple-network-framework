@@ -19,11 +19,13 @@ The `all` extra includes SSDP, mDNS, BLE, FastAPI, SSE, and Uvicorn. OpenSLP add
 import asyncio
 from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
+
 async def main():
     async with DiscoveryEngine(create_plugins(), storage=InMemoryStorage()) as engine:
         async for event in engine.discover():
             print(event.state.value, event.observation.name)
             print(engine.snapshot(protocol="mdns"))
+
 
 asyncio.run(main())
 ```
@@ -76,6 +78,7 @@ Implement `DiscoveryPlugin` with a unique `name`, async `start()` and `stop()`, 
 ```python
 from collections.abc import AsyncIterator
 from snf import DiscoveryEvent, DiscoveryObservation, DiscoveryState
+
 
 class ExamplePlugin:
     name = "example"

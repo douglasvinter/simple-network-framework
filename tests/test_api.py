@@ -36,8 +36,10 @@ async def test_http_routes_and_utc_health_timestamp():
     app.include_router(create_router(runtime), prefix="/network")
     paths = set(app.openapi()["paths"])
     assert paths == {
-        "/network/discoveries", "/network/discoveries/map",
-        "/network/discoveries/events", "/network/health",
+        "/network/discoveries",
+        "/network/discoveries/map",
+        "/network/discoveries/events",
+        "/network/health",
     }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         before = await client.get("/network/health")
@@ -47,6 +49,7 @@ async def test_http_routes_and_utc_health_timestamp():
                 if runtime.snapshot():
                     break
                 import asyncio
+
                 await asyncio.sleep(0.01)
             health = (await client.get("/network/health")).json()
             assert health["discovery_running"] is False

@@ -138,9 +138,7 @@ class BLEPlugin:
                 await self._scanner.stop()
             self._scanner = None
             raise
-        self._expiry_task = asyncio.create_task(
-            self._expire_stale_devices(), name="snf:ble-expiry"
-        )
+        self._expiry_task = asyncio.create_task(self._expire_stale_devices(), name="snf:ble-expiry")
         _LOGGER.debug("BLE scanning started")
 
     async def _expire_stale_devices(self) -> None:
@@ -149,18 +147,15 @@ class BLEPlugin:
             await asyncio.sleep(interval)
             now = asyncio.get_running_loop().time()
             expired = [
-                address for address, seen_at in self._last_seen.items()
+                address
+                for address, seen_at in self._last_seen.items()
                 if now - seen_at >= self.device_timeout
             ]
             for address in expired:
                 self._last_seen.pop(address, None)
                 self._last_emitted.pop(address, None)
-                device = DiscoveryObservation(
-                    protocol=self.name, identifier=address, name=address
-                )
-                await self._events.put(
-                    DiscoveryEvent(DiscoveryState.REMOVED, device)
-                )
+                device = DiscoveryObservation(protocol=self.name, identifier=address, name=address)
+                await self._events.put(DiscoveryEvent(DiscoveryState.REMOVED, device))
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
         if not self._running:

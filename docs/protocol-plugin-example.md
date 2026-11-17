@@ -85,9 +85,7 @@ class _BeaconProtocol(asyncio.DatagramProtocol):
     def __init__(self, plugin: ExampleBeaconPlugin) -> None:
         self._plugin = plugin
 
-    def datagram_received(
-        self, data: bytes, addr: tuple[str, int]
-    ) -> None:
+    def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         self._plugin._handle_datagram(data, addr)
 
     def error_received(self, exc: Exception) -> None:
@@ -169,11 +167,7 @@ class ExampleBeaconPlugin:
             metadata={"source_address": addr[0]},
         )
 
-        state = (
-            DiscoveryState.ADDED
-            if action == "DISCOVERED"
-            else DiscoveryState.REMOVED
-        )
+        state = DiscoveryState.ADDED if action == "DISCOVERED" else DiscoveryState.REMOVED
         self._events.put_nowait(DiscoveryEvent(state, device))
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:

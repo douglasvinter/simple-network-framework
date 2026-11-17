@@ -37,9 +37,7 @@ class ValidPlugin:
 
 
 def test_load_plugins_logs_import_failure_and_continues(monkeypatch, caplog):
-    broken = EntryPoint(
-        "broken", "broken_plugin:Plugin", error=ImportError("missing dependency")
-    )
+    broken = EntryPoint("broken", "broken_plugin:Plugin", error=ImportError("missing dependency"))
     valid = EntryPoint("valid", "valid_plugin:Plugin", loaded=ValidPlugin)
     monkeypatch.setattr(plugin_module, "entry_points", lambda **kwargs: [broken, valid])
 

@@ -73,9 +73,7 @@ async def test_ssdp_preserves_distinct_service_advertisements_with_shared_udn(mo
 
     async def fake_async_search(*, async_callback, timeout, search_target):
         for usn in usns:
-            await async_callback(
-                {"_host": "192.0.2.40", "USN": usn, "ST": usn.split("::", 1)[-1]}
-            )
+            await async_callback({"_host": "192.0.2.40", "USN": usn, "ST": usn.split("::", 1)[-1]})
         plugin._running = False
 
     search_module.async_search = fake_async_search

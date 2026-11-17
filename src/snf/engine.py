@@ -123,9 +123,7 @@ class DiscoveryEngine:
         await self._stop_plugins(self._active_plugins)
         self._active_plugins = ()
 
-    async def _pump(
-        self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]
-    ) -> None:
+    async def _pump(self, plugin: DiscoveryPlugin, queue: asyncio.Queue[object]) -> None:
         _LOGGER.debug("Discovery pump started for plugin %s", plugin.name)
         try:
             async for event in plugin.discover():
