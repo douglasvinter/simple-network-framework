@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urljoin
 
+from snf.models import DiscoveryObservation
+
 
 class UPnPInspectionError(ValueError):
     """An unsafe, unreachable, oversized, or malformed UPnP description."""
@@ -111,6 +113,17 @@ def _validate_url(url: str) -> tuple[str, int, str]:
     return parts.hostname, port, parts.path or "/"
 
 
+def location_from_observation(observation: DiscoveryObservation) -> str:
+    """Extract LOCATION only from an SSDP observation, never an arbitrary endpoint."""
+    if observation.protocol != "ssdp":
+        raise UPnPInspectionError("Only SSDP observations support UPnP inspection")
+    location = observation.metadata.get("location")
+    if not isinstance(location, str) or not location.strip():
+        raise UPnPInspectionError("SSDP observation has no valid LOCATION")
+    _validate_url(location)
+    return location
+
+
 class UPnPInspector:
     """Fetch bounded local UPnP XML; never invoke advertised actions."""
 
@@ -122,6 +135,18 @@ class UPnPInspector:
         self.max_bytes = max_bytes
         self.max_depth = max_depth
         self._semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def inspect_observation(self, observation: DiscoveryObservation) -> UPnPDevice:
+        """Inspect a discovered SSDP observation without changing its state."""
+        return await self.inspect(location_from_observation(observation))
+
+    async def inspect_observations(
+        self, observations: list[DiscoveryObservation] | tuple[DiscoveryObservation, ...]
+    ) -> dict[str, UPnPDevice]:
+        """Inspect each unique LOCATION once; failures propagate to the caller."""
+        locations = dict.fromkeys(location_from_observation(item) for item in observations)
+        results = await asyncio.gather(*(self.inspect(location) for location in locations))
+        return dict(zip(locations, results, strict=True))
 
     async def inspect(self, location: str) -> UPnPDevice:
         """Inspect a LOCATION URL. DNS results and HTTP redirects are restricted."""

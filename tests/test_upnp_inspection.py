@@ -73,3 +73,52 @@ async def test_private_lan_http_integration():
     finally:
         server.close()
         await server.wait_closed()
+
+
+from snf.models import DiscoveryObservation
+from snf.inspection.upnp import location_from_observation
+
+
+def test_location_from_ssdp_observation():
+    observation = DiscoveryObservation("ssdp", "uuid:test", "TV", metadata={
+        "location": "http://192.168.15.9:9110/ip_control"
+    })
+    assert location_from_observation(observation) == "http://192.168.15.9:9110/ip_control"
+
+
+@pytest.mark.parametrize("observation", [
+    DiscoveryObservation("mdns", "x", "TV", metadata={"location": "http://192.168.1.2"}),
+    DiscoveryObservation("ssdp", "x", "TV"),
+    DiscoveryObservation("ssdp", "x", "TV", metadata={"location": 123}),
+    DiscoveryObservation("ssdp", "x", "TV", metadata={"location": "file:///etc/passwd"}),
+])
+def test_rejects_non_ssdp_or_invalid_location(observation):
+    with pytest.raises(UPnPInspectionError):
+        location_from_observation(observation)
+
+
+@pytest.mark.asyncio
+async def test_batch_inspection_deduplicates_shared_location():
+    location = "http://192.168.15.9:9110/ip_control"
+    records = tuple(DiscoveryObservation("ssdp", f"ad-{i}", "TV", metadata={
+        "location": location
+    }) for i in range(4))
+    inspector = UPnPInspector()
+    parsed = parse_description(XML, location)
+    with patch.object(inspector, "inspect", return_value=parsed) as mocked:
+        result = await inspector.inspect_observations(records)
+    assert result == {location: parsed}
+    mocked.assert_awaited_once_with(location)
+
+
+@pytest.mark.asyncio
+async def test_single_observation_inspection():
+    location = "http://192.168.15.9:9080"
+    observation = DiscoveryObservation("ssdp", "nonstandard-udn", "TV", metadata={
+        "location": location
+    })
+    inspector = UPnPInspector()
+    with patch.object(inspector, "inspect", return_value=parse_description(XML, location)) as mocked:
+        result = await inspector.inspect_observation(observation)
+    assert result.friendly_name == "Living Room TV"
+    mocked.assert_awaited_once_with(location)

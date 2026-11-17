@@ -9,8 +9,9 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
-from snf.api.schemas import DiscoveryObservationResponse, NetworkEntityResponse
+from snf.api.schemas import DiscoveryObservationResponse, NetworkEntityResponse, UPnPDeviceResponse
 from snf.entities import NetworkEntity
+from snf.inspection.upnp import UPnPInspector, UPnPInspectionError
 from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
 
@@ -61,6 +62,22 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             return runtime.entities(protocol=protocol)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @router.get("/discoveries/inspect", response_model=UPnPDeviceResponse)
+    async def inspect_discovery(identifier: str) -> object:
+        """Explicit, read-only inspection of a discovered SSDP advertisement."""
+        validate("ssdp")
+        try:
+            observations = runtime.snapshot(protocol="ssdp")
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        observation = next((item for item in observations if item.identifier == identifier), None)
+        if observation is None:
+            raise HTTPException(status_code=404, detail="SSDP observation not found")
+        try:
+            return await UPnPInspector().inspect_observation(observation)
+        except UPnPInspectionError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
     async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:
