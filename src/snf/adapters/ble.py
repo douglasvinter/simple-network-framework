@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any, Literal, Protocol
 
+from snf.bluetooth.assigned_numbers import company_name, uuid_details
 from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, Endpoint, Service
 
 
@@ -87,6 +88,21 @@ class BLEPlugin:
                 "local_name": advertised_name,
                 "service_uuids": service_uuids,
                 "manufacturer_data": manufacturer_data,
+                "company_names": {
+                    key: name
+                    for key in manufacturer_data
+                    if (name := company_name(int(key))) is not None
+                },
+                "service_names": {
+                    uuid: details["name"]
+                    for uuid in service_uuids
+                    if (details := uuid_details(uuid, kind="service")) is not None
+                },
+                "service_data_names": {
+                    uuid: details["name"]
+                    for uuid in service_data
+                    if (details := uuid_details(uuid, kind="service")) is not None
+                },
                 "service_data": service_data,
             },
         )
