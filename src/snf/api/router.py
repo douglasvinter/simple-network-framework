@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from snf.api.schemas import (
+    BLEInspectionErrorResponse,
+    BLEInspectionResponse,
     DiscoveryObservationResponse,
     InspectionErrorResponse,
     InspectionSuccessResponse,
@@ -20,6 +22,7 @@ from snf.api.schemas import (
     UPnPDeviceResponse,
 )
 from snf.entities import NetworkEntity
+from snf.inspection.ble import BLEInspectionError, BLEInspector
 from snf.inspection.mdns import MDNSInspectionError, MDNSInspector
 from snf.inspection.ssdp_metadata import SSDPMetadataParser
 from snf.inspection.upnp import UPnPInspectionError, UPnPInspector
@@ -191,6 +194,51 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             "port": details.port,
             "addresses": details.addresses,
             "properties": details.properties,
+            "error": {},
+        })
+
+    @router.get(
+        "/discoveries/inspect/ble",
+        response_model=BLEInspectionResponse,
+        responses={
+            404: {"model": BLEInspectionErrorResponse},
+            422: {"model": BLEInspectionErrorResponse},
+            502: {"model": BLEInspectionErrorResponse},
+            503: {"model": BLEInspectionErrorResponse},
+        },
+    )
+    async def inspect_ble(identifier: str | None = None) -> object:
+        """Explicitly connect to enumerate GATT metadata without reading values."""
+
+        def failure(status: int, code: str, message: str) -> JSONResponse:
+            payload = BLEInspectionErrorResponse(
+                device=None, error={"code": code, "message": message}
+            )
+            return JSONResponse(status_code=status, content=payload.model_dump())
+
+        if identifier is None or not identifier.strip():
+            return failure(422, "INVALID_IDENTIFIER", "A BLE identifier is required")
+        try:
+            runtime.validate_protocol("ble")
+        except ValueError as exc:
+            return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
+        try:
+            observations = runtime.snapshot(protocol="ble")
+        except RuntimeError as exc:
+            return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
+        observation = next(
+            (item for item in observations if item.identifier == identifier), None
+        )
+        if observation is None:
+            return failure(404, "OBSERVATION_NOT_FOUND", "BLE observation not found")
+        try:
+            details = await BLEInspector().inspect_observation(observation)
+        except BLEInspectionError as exc:
+            status = 422 if exc.code == "INVALID_OBSERVATION" else 502
+            return failure(status, exc.code, str(exc))
+        return BLEInspectionResponse.model_validate({
+            "identifier": details.identifier,
+            "services": details.services,
             "error": {},
         })
 
