@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Annotated
-
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
@@ -24,7 +22,6 @@ class HealthResponse(BaseModel):
 def create_router(runtime: NetworkRuntime) -> APIRouter:
     """Create HTTP routes sharing the caller-owned runtime; no implicit startup."""
     router = APIRouter()
-    Protocol = Annotated[str | None, Query()]
 
     def validate(protocol: str | None) -> None:
         try:
@@ -33,7 +30,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/discoveries", response_model=list[DiscoveryObservationResponse])
-    def discoveries(protocol: Protocol = None) -> tuple:
+    def discoveries(protocol: str | None = None) -> tuple:
         validate(protocol)
         try:
             return runtime.snapshot(protocol=protocol)
@@ -41,7 +38,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @router.get("/discoveries/map", response_model=dict[str, dict[str, DiscoveryObservationResponse]])
-    def discovery_map(protocol: Protocol = None) -> dict:
+    def discovery_map(protocol: str | None = None) -> dict:
         validate(protocol)
         try:
             return runtime.observation_map(protocol=protocol)
@@ -49,7 +46,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
-    async def events(request: Request, protocol: Protocol = None) -> EventSourceResponse:
+    async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:
         validate(protocol)
         try:
             subscription = runtime.subscribe(protocol=protocol)
