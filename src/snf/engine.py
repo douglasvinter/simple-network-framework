@@ -56,7 +56,9 @@ class DiscoveryEngine:
         """Look up an observation by its protocol-scoped identifier."""
         return self._registry.get(protocol, identifier)
 
-    async def saved_observations(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]:
+    async def saved_observations(
+        self, *, protocol: str | None = None
+    ) -> tuple[DiscoveryObservation, ...]:
         """Read remembered observations from the configured storage backend."""
         return await self.storage.snapshot(protocol=protocol)
 
