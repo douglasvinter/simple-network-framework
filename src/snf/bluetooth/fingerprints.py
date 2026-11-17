@@ -7,6 +7,7 @@ ambiguous. Only signatures backed by public decoder definitions are matched.
 
 from __future__ import annotations
 
+import re
 from typing import TypedDict
 
 
@@ -39,7 +40,27 @@ def identify_ble_device(
     `local_name` is accepted for future corroboration, never as sole evidence.
     Manufacturer data is not decoded for controls, telemetry or private fields.
     """
-    _ = local_name
+    # Name-based family hints require the matching company ID, and are
+    # explicitly marked as unverified: both fields can be spoofed.
+    known_names = (
+        (301, r"^(?:WH|WF)-1000XM[345]$", "Sony", "1000X headphones", "audio"),
+        (117, r"^Galaxy Buds(?:2|3| Pro| Live| FE|\\+|[23] Pro)?.*$",
+         "Samsung", "Galaxy Buds", "audio"),
+        (196, r"^LG (?:TONE|HBS)[\\w -]*$", "LG", "LG wireless audio", "audio"),
+    )
+    if local_name:
+        for company_id, pattern, brand, family, category in known_names:
+            if company_id in manufacturer_data and re.fullmatch(
+                pattern, local_name, flags=re.IGNORECASE
+            ):
+                return {
+                    "brand": brand,
+                    "family": family,
+                    "category": category,
+                    "evidence": f"company_id={company_id}; advertised_name={local_name}",
+                    "source": "advertised_name_and_bluetooth_sig_company_id",
+                    "confidence": "unverified_name_hint",
+                }
     apple = manufacturer_data.get(76)
     if apple is not None and apple.startswith(_APPLE_AIRPODS_PREFIX):
         return {
