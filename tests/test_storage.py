@@ -3,9 +3,9 @@
 import pytest
 
 from snf import (
-    DiscoveryObservation,
     DiscoveryEngine,
     DiscoveryEvent,
+    DiscoveryObservation,
     DiscoveryState,
     InMemoryStorage,
 )

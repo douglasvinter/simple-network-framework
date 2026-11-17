@@ -5,7 +5,13 @@ import logging
 
 import pytest
 
-from snf import DiscoveryObservation, DiscoveryEngine, DiscoveryEvent, DiscoveryState, InMemoryStorage
+from snf import (
+    DiscoveryEngine,
+    DiscoveryEvent,
+    DiscoveryObservation,
+    DiscoveryState,
+    InMemoryStorage,
+)
 
 
 class QueuePlugin:
