@@ -22,7 +22,7 @@ class DiscoveryPlugin(Protocol):
         """Allocate resources and begin observing the protocol."""
 
     def discover(self) -> AsyncIterator[DiscoveryEvent]:
-        """Yield device lifecycle events until stopped."""
+        """Yield observation lifecycle events until stopped."""
 
     async def stop(self) -> None:
         """Stop discovery and release all owned resources."""

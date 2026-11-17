@@ -43,7 +43,7 @@ A consumer creates plugin instances and enters the engine's asynchronous context
                                    asyncio.Queue
                                          |
                                          v
-                              DeviceRegistry.process()
+                              ObservationRegistry.process()
                                          |
                                +----------+----------+
                                |                     |
@@ -226,22 +226,22 @@ This means adapters do not need to coordinate with each other or directly mutate
 
 ### Where is the data stored?
 
-The current inventory is held in the engine's `DeviceRegistry`, which is an in-memory `OrderedDict` keyed by `(protocol, identifier)`.
+The current inventory is held in the engine's `ObservationRegistry`, which is an in-memory `OrderedDict` keyed by `(protocol, identifier)`.
 
 The public accessors are:
 
 ```python
-engine.devices
-engine.get_device(protocol, identifier)
+engine.observations
+engine.get_observation(protocol, identifier)
 ```
 
-- `engine.devices` returns an immutable tuple snapshot of the current records.
-- `engine.get_device()` returns one current record or `None`.
+- `engine.observations` returns an immutable tuple snapshot of the current records.
+- `engine.get_observation()` returns one current record or `None`.
 - The default maximum size is 4,096 entries; the engine constructor can override it with `dedupe_cache_size`.
 
 When the maximum is exceeded, the oldest registry entry is removed to keep the inventory bounded. This capacity eviction currently does not emit a lifecycle event.
 
-The live registry is process-local. The engine also requires an injected `InventoryStorage` driver; it awaits `upsert(device)` for normalized `ADDED`/`UPDATED` observations before yielding events. Duplicate observations do not reach storage. A `REMOVED` event removes the live record but deliberately retains the saved record. Read historical records with `await engine.saved_devices(protocol=None)`; they are not preloaded as live devices. `InMemoryStorage` persists only for the lifetime of its instance, whereas a custom driver may persist across restarts. Write exceptions propagate to the consumer. The storage driver owns retries and recovery; because the live registry has already been updated, identical observations may be suppressed after a failed write. The caller owns any external storage connection lifecycle. See [Developer Guide — Inventory storage](developer-guide.md#10-inventory-storage-and-application-boundaries) for the contract and implementation examples.
+The live registry is process-local. The engine also requires an injected `ObservationStorage` driver; it awaits `upsert(device)` for normalized `ADDED`/`UPDATED` observations before yielding events. Duplicate observations do not reach storage. A `REMOVED` event removes the live record but deliberately retains the saved record. Read historical records with `await engine.saved_observations(protocol=None)`; they are not preloaded as live devices. `InMemoryStorage` persists only for the lifetime of its instance, whereas a custom driver may persist across restarts. Write exceptions propagate to the consumer. The storage driver owns retries and recovery; because the live registry has already been updated, identical observations may be suppressed after a failed write. The caller owns any external storage connection lifecycle. See [Developer Guide — Inventory storage](developer-guide.md#10-inventory-storage-and-application-boundaries) for the contract and implementation examples.
 
 ## 8. How the consumer receives an event
 
@@ -254,13 +254,13 @@ logger = logging.getLogger(__name__)
 
 async with DiscoveryEngine(plugins, storage=InMemoryStorage()) as engine:
     async for event in engine.discover():
-        logger.info("Discovery event: %s %s", event.state, event.device)
-        logger.debug("Current inventory: %s", engine.devices)
+        logger.info("Discovery event: %s %s", event.state, event.observation)
+        logger.debug("Current inventory: %s", engine.observations)
 ```
 
 The consumer sees one merged stream. It does not need to create one loop per protocol.
 
-The event stream is not a complete history. It reports changes observed during the current discovery run, while `engine.devices` represents the current in-memory inventory.
+The event stream is not a complete history. It reports changes observed during the current discovery run, while `engine.observations` represents the current in-memory inventory.
 
 ## 9. How a plugin pump ends
 

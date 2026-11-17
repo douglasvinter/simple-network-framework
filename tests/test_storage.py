@@ -3,9 +3,9 @@
 import pytest
 
 from snf import (
-    Device,
     DiscoveryEngine,
     DiscoveryEvent,
+    DiscoveryObservation,
     DiscoveryState,
     InMemoryStorage,
 )
@@ -14,8 +14,8 @@ from snf import (
 @pytest.mark.asyncio
 async def test_memory_storage_key_value_operations():
     storage = InMemoryStorage()
-    mdns = Device("mdns", "same", "Printer")
-    ble = Device("ble", "same", "Sensor")
+    mdns = DiscoveryObservation("mdns", "same", "Printer")
+    ble = DiscoveryObservation("ble", "same", "Sensor")
     await storage.upsert(mdns)
     await storage.upsert(ble)
     assert await storage.get("mdns", "same") == mdns
@@ -29,7 +29,7 @@ async def test_memory_storage_key_value_operations():
 
 @pytest.mark.asyncio
 async def test_engine_remembers_removed_devices_without_marking_them_live():
-    device = Device("mdns", "printer", "Printer")
+    device = DiscoveryObservation("mdns", "printer", "Printer")
 
     class Plugin:
         name = "mdns"
@@ -52,7 +52,7 @@ async def test_engine_remembers_removed_devices_without_marking_them_live():
             DiscoveryState.REMOVED,
         ]
         assert engine.snapshot() == ()
-        assert await engine.saved_devices(protocol="mdns") == (device,)
+        assert await engine.saved_observations(protocol="mdns") == (device,)
 
 
 def test_storage_is_required():

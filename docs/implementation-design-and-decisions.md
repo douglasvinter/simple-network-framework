@@ -33,8 +33,8 @@ The framework is composed of five cooperating areas:
 
 1. **Protocol adapters** observe their own protocols and emit normalized `DiscoveryEvent` objects.
 2. **DiscoveryEngine** starts adapters, runs their asynchronous event streams concurrently, and merges the streams.
-3. **DeviceRegistry** applies lifecycle semantics, suppresses duplicate observations, and maintains the current inventory.
-4. **InventoryStorage** defines asynchronous key/value operations for remembered device records, with `InMemoryStorage` as the bundled reference implementation.
+3. **ObservationRegistry** applies lifecycle semantics, suppresses duplicate observations, and maintains the current inventory.
+4. **ObservationStorage** defines asynchronous key/value operations for remembered device records, with `InMemoryStorage` as the bundled reference implementation.
 5. **Consumer application** receives events and queries live or remembered records.
 
 ```text
@@ -53,13 +53,13 @@ The framework is composed of five cooperating areas:
                   \          |          /
                     asyncio event queue
                             |
-                      DeviceRegistry
+                      ObservationRegistry
                             |
                  bounded live in-memory inventory
                             |
                     ADDED / UPDATED
                             v
-                    InventoryStorage
+                    ObservationStorage
                             |
                   injected storage driver
 ```
@@ -70,9 +70,9 @@ The engine does not need to understand SSDP, DNS-SD, SLP, or BLE. Each adapter o
 
 The public models are defined in `src/snf/models.py`.
 
-### Device
+### DiscoveryObservation
 
-A `Device` is the inventory record produced by a protocol adapter. It contains:
+A `DiscoveryObservation` is the inventory record produced by a protocol adapter. It contains:
 
 - `protocol`: protocol namespace, such as `ssdp`, `mdns`, `slp`, or `ble`.
 - `identifier`: identifier supplied or derived by that protocol.
@@ -81,7 +81,7 @@ A `Device` is the inventory record produced by a protocol adapter. It contains:
 - `services`: services advertised by the device.
 - `metadata`: additional protocol-specific observations.
 
-A device's identity is the tuple `(protocol, identifier)`, exposed by `Device.identity`.
+A device's identity is the tuple `(protocol, identifier)`, exposed by `DiscoveryObservation.identity`.
 
 ### Service
 
@@ -150,9 +150,9 @@ See [Async Discovery Lifecycle](async-discovery-lifecycle.md) for the detailed e
 
 ## 7. In-memory inventory
 
-The `DeviceRegistry` in `src/snf/registry.py` is the current inventory implementation.
+The `ObservationRegistry` in `src/snf/registry.py` is the current inventory implementation.
 
-- It stores the latest `Device` per protocol-scoped identity.
+- It stores the latest `DiscoveryObservation` per protocol-scoped identity.
 - It returns `ADDED` for the first observation.
 - It suppresses an identical subsequent observation.
 - It returns `UPDATED` when an existing record changes.
@@ -225,4 +225,4 @@ Future changes should preserve the separation between protocol adapters, orchest
 
 ## Injected inventory storage decision
 
-`DiscoveryEngine` requires `storage: InventoryStorage` as a keyword-only constructor argument. The live `DeviceRegistry` remains the source for synchronous snapshots, deduplication, and event normalization. Storage is a separate async key/value contract (`get`, `upsert`, `remove`, `snapshot`) keyed by `(protocol, identifier)`. Only normalized ADDED/UPDATED events are upserted; REMOVED does not erase remembered records. `await engine.saved_devices()` retrieves historical records without presenting them as currently online. Storage exceptions propagate directly. Drivers own retry and recovery policies; the registry may suppress identical observations after a failed write. The consumer owns storage resource lifecycle. `InMemoryStorage(InventoryStorage)` is the reference implementation, with no bundled database. See [Inventory Storage](developer-guide.md#10-inventory-storage-and-application-boundaries).
+`DiscoveryEngine` requires `storage: ObservationStorage` as a keyword-only constructor argument. The live `ObservationRegistry` remains the source for synchronous snapshots, deduplication, and event normalization. Storage is a separate async key/value contract (`get`, `upsert`, `remove`, `snapshot`) keyed by `(protocol, identifier)`. Only normalized ADDED/UPDATED events are upserted; REMOVED does not erase remembered records. `await engine.saved_observations()` retrieves historical records without presenting them as currently online. Storage exceptions propagate directly. Drivers own retry and recovery policies; the registry may suppress identical observations after a failed write. The consumer owns storage resource lifecycle. `InMemoryStorage(ObservationStorage)` is the reference implementation, with no bundled database. See [Inventory Storage](developer-guide.md#10-inventory-storage-and-application-boundaries).

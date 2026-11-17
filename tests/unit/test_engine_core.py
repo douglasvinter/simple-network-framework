@@ -5,7 +5,13 @@ import logging
 
 import pytest
 
-from snf import Device, DiscoveryEngine, DiscoveryEvent, DiscoveryState, InMemoryStorage
+from snf import (
+    DiscoveryEngine,
+    DiscoveryEvent,
+    DiscoveryObservation,
+    DiscoveryState,
+    InMemoryStorage,
+)
 
 
 class QueuePlugin:
@@ -27,7 +33,7 @@ class QueuePlugin:
 
 
 def event(name: str, state: DiscoveryState = DiscoveryState.ADDED):
-    return DiscoveryEvent(state, Device("test", name, name))
+    return DiscoveryEvent(state, DiscoveryObservation("test", name, name))
 
 
 @pytest.mark.asyncio
@@ -44,7 +50,7 @@ async def test_failing_plugin_does_not_interrupt_healthy_plugin(caplog):
         async with DiscoveryEngine([failing, healthy], storage=InMemoryStorage()) as engine:
             received = [item async for item in engine.discover()]
 
-    assert {item.device.identifier for item in received} == {
+    assert {item.observation.identifier for item in received} == {
         "before-error",
         "healthy-device",
     }
@@ -68,7 +74,7 @@ async def test_closing_consumer_cancels_plugin_streams_and_runs_generator_cleanu
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         stream = engine.discover()
         first = await asyncio.wait_for(anext(stream), timeout=1)
-        assert first.device.identifier == "first"
+        assert first.observation.identifier == "first"
         await stream.aclose()
         await asyncio.wait_for(cleaned_up.wait(), timeout=1)
 
@@ -77,7 +83,7 @@ async def test_closing_consumer_cancels_plugin_streams_and_runs_generator_cleanu
 
 @pytest.mark.asyncio
 async def test_removed_device_is_removed_from_inventory_and_can_reappear():
-    device = Device("test", "device-1", "Device")
+    device = DiscoveryObservation("test", "device-1", "DiscoveryObservation")
     plugin = QueuePlugin(
         "test",
         [
@@ -89,7 +95,7 @@ async def test_removed_device_is_removed_from_inventory_and_can_reappear():
 
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         received = [item async for item in engine.discover()]
-        assert engine.get_device("test", "device-1") == device
+        assert engine.get_observation("test", "device-1") == device
 
     assert [item.state for item in received] == [
         DiscoveryState.ADDED,

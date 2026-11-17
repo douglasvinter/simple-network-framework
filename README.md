@@ -197,7 +197,7 @@ async def main() -> None:
 
     async with DiscoveryEngine(selected, storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
-            device = event.device
+            device = event.observation
             logger.info(
                 "%s %s %s %s",
                 event.state,
@@ -214,11 +214,11 @@ SNF logs and skips plugins that fail construction or startup by default. Use
 `create_plugins(strict=True)` to fail on construction, and
 `DiscoveryEngine(selected, storage=InMemoryStorage(), strict=True)` to fail on startup.
 
-The engine requires an injected storage driver. `InMemoryStorage` is bundled; applications can implement the `InventoryStorage` protocol for other storage backends. Storage exceptions propagate to the caller, and drivers own their retry/recovery policies. See the [Developer Guide](docs/developer-guide.md#10-inventory-storage-and-application-boundaries).
+The engine requires an injected storage driver. `InMemoryStorage` is bundled; applications can implement the `ObservationStorage` protocol for other storage backends. Storage exceptions propagate to the caller, and drivers own their retry/recovery policies. See the [Developer Guide](docs/developer-guide.md#10-inventory-storage-and-application-boundaries).
 
 The engine starts plugins concurrently and merges their event streams. A consumer
-can inspect the current immutable inventory through `engine.devices`, or retrieve
-a protocol-scoped record with `engine.get_device(protocol, identifier)`.
+can inspect the current immutable inventory through `engine.observations`, or retrieve
+a protocol-scoped record with `engine.get_observation(protocol, identifier)`.
 
 To include SLP, install OpenSLP and make sure `slptool` is on `PATH` before
 instantiating its adapter. The example script selects SLP automatically when
@@ -247,7 +247,7 @@ without printing events. Press Ctrl+C to stop the examples.
 
 ## Domain model
 
-- `Device`: a protocol-scoped discovered inventory record.
+- `DiscoveryObservation`: a protocol-scoped discovered inventory record.
 - `Service`: a service advertised by a device.
 - `Endpoint`: a transport-specific locator, such as an IP address/port or BLE address.
 - `DiscoveryEvent`: an ADDED, UPDATED, or REMOVED lifecycle event for a device.

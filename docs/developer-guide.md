@@ -56,7 +56,7 @@ The common application flow is:
 3. Pass the instances to `DiscoveryEngine`.
 4. Enter the engine's asynchronous context.
 5. Consume `engine.discover()` with `async for`.
-6. Read the current inventory through `engine.devices` or `engine.get_device()`.
+6. Read the current inventory through `engine.observations` or `engine.get_observation()`.
 
 ```python
 import asyncio
@@ -72,7 +72,7 @@ async def main() -> None:
 
     async with DiscoveryEngine(selected, storage=InMemoryStorage()) as engine:
         async for event in engine.discover():
-            device = event.device
+            device = event.observation
             logger.info(
                 "%s %s %s %s %s",
                 event.state.value,
@@ -103,7 +103,7 @@ An event has a `state` and a `device`.
 ```python
 async with DiscoveryEngine(selected, storage=InMemoryStorage()) as engine:
     async for event in engine.discover():
-        device = event.device
+        device = event.observation
 
         logger.info(
             "%s observation: %s",
@@ -112,26 +112,26 @@ async with DiscoveryEngine(selected, storage=InMemoryStorage()) as engine:
         )
 
         # Current inventory snapshot, not a historical event list.
-        current_devices = engine.devices
+        current_devices = engine.observations
 
         # Filter a point-in-time snapshot by protocol.
         mdns_devices = engine.snapshot(protocol="mdns")
 
         # Identifiers are scoped to the protocol.
-        current = engine.get_device(device.protocol, device.identifier)
+        current = engine.get_observation(device.protocol, device.identifier)
 ```
 
 The public API also exposes the domain models:
 
-- `Device`
+- `DiscoveryObservation`
 - `Service`
 - `Endpoint`
 - `DiscoveryEvent`
 - `DiscoveryState`
 
-The `DeviceRegistry` class is public, but most applications should use the inventory managed by `DiscoveryEngine`.
+The `ObservationRegistry` class is public, but most applications should use the inventory managed by `DiscoveryEngine`.
 
-Use `engine.snapshot()` for all devices or `engine.snapshot(protocol="ble")` for one protocol. Both return immutable tuples representing the inventory at the moment of the call; they do not trigger discovery or wait for new devices. `engine.devices` remains an alias for the unfiltered snapshot. An unknown protocol returns an empty tuple. Snapshots only reflect events already consumed through `engine.discover()`.
+Use `engine.snapshot()` for all devices or `engine.snapshot(protocol="ble")` for one protocol. Both return immutable tuples representing the inventory at the moment of the call; they do not trigger discovery or wait for new devices. `engine.observations` remains an alias for the unfiltered snapshot. An unknown protocol returns an empty tuple. Snapshots only reflect events already consumed through `engine.discover()`.
 
 ### Understand the event states
 
@@ -203,7 +203,7 @@ A plugin implements the `DiscoveryPlugin` protocol:
 from collections.abc import AsyncIterator
 
 from snf.models import (
-    Device,
+    DiscoveryObservation,
     DiscoveryEvent,
     DiscoveryState,
     Endpoint,
@@ -219,7 +219,7 @@ class ExamplePlugin:
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
         """Yield normalized device lifecycle events."""
-        device = Device(
+        device = DiscoveryObservation(
             protocol=self.name,
             identifier="example-device-001",
             name="Example device",
@@ -252,7 +252,7 @@ An async-generator method declared with `async def` satisfies the iterator behav
 ### Plugin implementation guidelines
 
 1. **Use a stable protocol namespace.** Set `name` to a unique, lowercase protocol identifier.
-2. **Normalize at the adapter boundary.** Translate protocol-specific objects into `Device`, `Service`, `Endpoint`, and `DiscoveryEvent`.
+2. **Normalize at the adapter boundary.** Translate protocol-specific objects into `DiscoveryObservation`, `Service`, `Endpoint`, and `DiscoveryEvent`.
 3. **Use protocol-scoped identifiers.** The registry key is `(device.protocol, device.identifier)`.
 4. **Emit meaningful lifecycle events.** Emit `REMOVED` only when your protocol-specific discovery logic has enough evidence that the observation should leave the inventory.
 5. **Avoid noisy updates.** Do not emit an update for unchanged data. The registry suppresses exact duplicate device records, but adapter-side filtering can reduce queue traffic.
@@ -345,32 +345,32 @@ storage = InMemoryStorage()
 async with DiscoveryEngine(create_plugins(), storage=storage) as engine:
     async for event in engine.discover():
         live = engine.snapshot(protocol="mdns")
-        remembered = await engine.saved_devices(protocol="mdns")
+        remembered = await engine.saved_observations(protocol="mdns")
 ```
 
 ### Storage contract and custom implementations
 
-`InventoryStorage` is a structural `Protocol` with asynchronous key/value operations. Records are keyed by `(protocol, identifier)` to avoid collisions across discovery protocols:
+`ObservationStorage` is a structural `Protocol` with asynchronous key/value operations. Records are keyed by `(protocol, identifier)` to avoid collisions across discovery protocols:
 
 ```python
-from snf import Device, InventoryStorage
+from snf import DiscoveryObservation, ObservationStorage
 
-class MyStorage(InventoryStorage):
-    async def get(self, protocol: str, identifier: str) -> Device | None: ...
-    async def upsert(self, device: Device) -> None: ...
+class MyStorage(ObservationStorage):
+    async def get(self, protocol: str, identifier: str) -> DiscoveryObservation | None: ...
+    async def upsert(self, device: DiscoveryObservation) -> None: ...
     async def remove(self, protocol: str, identifier: str) -> None: ...
     async def snapshot(
         self, *, protocol: str | None = None
-    ) -> tuple[Device, ...]: ...
+    ) -> tuple[DiscoveryObservation, ...]: ...
 
-storage: InventoryStorage = MyStorage()
+storage: ObservationStorage = MyStorage()
 ```
 
-Explicit inheritance is optional for third-party implementations because `Protocol` supports structural typing. The bundled `InMemoryStorage` explicitly inherits `InventoryStorage`. A custom driver may implement its own persistence mechanism without changing SNF.
+Explicit inheritance is optional for third-party implementations because `Protocol` supports structural typing. The bundled `InMemoryStorage` explicitly inherits `ObservationStorage`. A custom driver may implement its own persistence mechanism without changing SNF.
 
 ### Live versus remembered devices
 
-`engine.devices`, `engine.snapshot()`, and `engine.get_device()` read the bounded, synchronous live `DeviceRegistry`. `await engine.saved_devices(protocol=None)` reads the injected storage, including records from previous sessions when supported by the driver.
+`engine.observations`, `engine.snapshot()`, and `engine.get_observation()` read the bounded, synchronous live `ObservationRegistry`. `await engine.saved_observations(protocol=None)` reads the injected storage, including records from previous sessions when supported by the driver.
 
 The engine awaits `storage.upsert(device)` after normalized `ADDED` and `UPDATED` events, before yielding those events. Duplicate observations are suppressed and not written. A `REMOVED` event clears the live registry record but **does not delete** the remembered record. To forget a device explicitly, call `await storage.remove(protocol, identifier)`. Previously saved devices are not automatically considered online when an engine starts.
 

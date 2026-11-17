@@ -89,10 +89,10 @@ async def test_real_mdns_adapter_and_engine_with_mocked_zeroconf(monkeypatch):
         await stream.aclose()
 
         assert event.state is DiscoveryState.ADDED
-        assert event.device.protocol == "mdns"
-        assert event.device.endpoints[0].address == "192.0.2.55"
-        assert event.device.endpoints[0].port == 8008
-        assert event.device.services[0].service_type == "_http._tcp.local."
-        assert engine.get_device("mdns", event.device.identifier) == event.device
+        assert event.observation.protocol == "mdns"
+        assert event.observation.endpoints[0].address == "192.0.2.55"
+        assert event.observation.endpoints[0].port == 8008
+        assert event.observation.services[0].service_type == "_http._tcp.local."
+        assert engine.get_observation("mdns", event.observation.identifier) == event.observation
 
     assert browser.cancelled

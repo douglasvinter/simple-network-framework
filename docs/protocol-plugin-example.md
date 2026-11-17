@@ -12,9 +12,9 @@ A protocol adapter is responsible for translating protocol-specific observations
 
 | Protocol concern | SNF representation |
 | --- | --- |
-| Protocol name | `Device.protocol` |
-| Stable identifier within that protocol | `Device.identifier` |
-| Human-readable advertised name | `Device.name` |
+| Protocol name | `DiscoveryObservation.protocol` |
+| Stable identifier within that protocol | `DiscoveryObservation.identifier` |
+| Human-readable advertised name | `DiscoveryObservation.name` |
 | Address and transport used to reach the device/service | `Endpoint` |
 | Advertised protocol service | `Service` |
 | First observation, changed observation, disappearance | `DiscoveryEvent` with `ADDED`, `UPDATED`, or `REMOVED` |
@@ -69,7 +69,7 @@ import logging
 from collections.abc import AsyncIterator
 
 from snf.models import (
-    Device,
+    DiscoveryObservation,
     DiscoveryEvent,
     DiscoveryState,
     Endpoint,
@@ -160,7 +160,7 @@ class ExampleBeaconPlugin:
             service_type="example-beacon",
             endpoints=(endpoint,),
         )
-        device = Device(
+        device = DiscoveryObservation(
             protocol=self.name,
             identifier=identifier,
             name=name,
@@ -267,8 +267,8 @@ async def main() -> None:
             _LOGGER.info(
                 "%s: %s (%s)",
                 event.state.value,
-                event.device.name,
-                event.device.identifier,
+                event.observation.name,
+                event.observation.identifier,
             )
 
 
@@ -304,11 +304,11 @@ def test_discovered_beacon_is_translated_to_snf_event():
     event = plugin._events.get_nowait()
 
     assert event.state is DiscoveryState.ADDED
-    assert event.device.protocol == "example-beacon"
-    assert event.device.identifier == "device-001"
-    assert event.device.name == "Living Room Sensor"
-    assert event.device.endpoints[0].address == "192.0.2.25"
-    assert event.device.endpoints[0].port == 5683
+    assert event.observation.protocol == "example-beacon"
+    assert event.observation.identifier == "device-001"
+    assert event.observation.name == "Living Room Sensor"
+    assert event.observation.endpoints[0].address == "192.0.2.25"
+    assert event.observation.endpoints[0].port == 5683
 
 
 def test_malformed_beacon_is_ignored():
@@ -337,7 +337,7 @@ Use mocks/fakes for protocol-library boundaries in deterministic tests. Keep tes
 Before publishing a protocol plugin, verify:
 
 - [ ] The plugin implements `name`, `start()`, `discover()`, and `stop()`.
-- [ ] Protocol-specific messages are translated into `Device`, `Service`, `Endpoint`, and `DiscoveryEvent`.
+- [ ] Protocol-specific messages are translated into `DiscoveryObservation`, `Service`, `Endpoint`, and `DiscoveryEvent`.
 - [ ] The protocol identifier is stable and scoped to the plugin's `name`.
 - [ ] `REMOVED` events are based on defensible protocol evidence or a documented expiry policy.
 - [ ] Blocking I/O does not run on the event loop.
