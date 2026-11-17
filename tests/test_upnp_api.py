@@ -63,7 +63,7 @@ async def test_http_inspection_end_to_end_and_error_isolation():
         assert failure.status_code == 502
         assert failure.json()["error"]["message"] == "invalid description"
         assert failure.json()["error"]["code"] == "INSPECTION_FAILED"
-        assert failure.json()["device"]["udn"] is None
+        assert failure.json()["device"]["udn"] == "uuid:sample"
         assert failure.json()["device"]["friendly_name"] is None
         assert runtime.snapshot() == (observation,)
 
