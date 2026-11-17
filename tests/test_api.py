@@ -40,7 +40,8 @@ async def test_http_routes_and_utc_health_timestamp():
         "/network/discoveries",
         "/network/discoveries/map",
         "/network/discoveries/events",
-        "/network/discoveries/inspect",
+        "/network/discoveries/inspect/mdns",
+        "/network/discoveries/inspect/upnp",
         "/network/health",
     }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
