@@ -4,29 +4,29 @@ import logging
 
 from snf.engine import DiscoveryEngine
 from snf.models import (
-    Device,
+    DiscoveryObservation,
     DiscoveryEvent,
     DiscoveryState,
     Endpoint,
     Service,
 )
 from snf.plugins import DiscoveryPlugin, create_plugins, load_plugins
-from snf.registry import DeviceRegistry
-from snf.storage import InMemoryStorage, InventoryStorage
+from snf.registry import ObservationRegistry
+from snf.storage import InMemoryStorage, ObservationStorage
 
 # Library logging is configured by the consuming application.
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "Device",
-    "DeviceRegistry",
+    "DiscoveryObservation",
+    "ObservationRegistry",
     "DiscoveryEngine",
     "DiscoveryEvent",
     "DiscoveryPlugin",
     "DiscoveryState",
     "Endpoint",
     "InMemoryStorage",
-    "InventoryStorage",
+    "ObservationStorage",
     "Service",
     "create_plugins",
     "load_plugins",

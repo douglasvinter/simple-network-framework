@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Mapping
 from importlib.util import find_spec
 
-from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ class SSDPPlugin:
                 usn = str(values.get("usn", ""))
                 location = values.get("location")
                 identifier = usn or str(location or host)
+                udn = usn.split("::", 1)[0] if usn.lower().startswith("uuid:") else None
                 endpoint = Endpoint("ip", host, port)
                 service = Service(
                     name=identifier,
@@ -77,13 +78,13 @@ class SSDPPlugin:
                     endpoints=(endpoint,),
                     metadata=values,
                 )
-                device = Device(
+                device = DiscoveryObservation(
                     protocol=self.name,
                     identifier=identifier,
                     name=str(values.get("server") or values.get("st") or identifier),
                     endpoints=(endpoint,),
                     services=(service,),
-                    metadata={"location": location, "usn": usn},
+                    metadata={"location": location, "usn": usn, "udn": udn},
                 )
                 await destination.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 

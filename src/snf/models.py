@@ -1,4 +1,4 @@
-"""Protocol-neutral domain models for discovered network and Bluetooth devices."""
+"""Protocol-neutral models for network discovery observations."""
 
 from __future__ import annotations
 
@@ -36,12 +36,11 @@ class Service:
 
 
 @dataclass(frozen=True, slots=True)
-class Device:
-    """A protocol-scoped inventory record.
+class DiscoveryObservation:
+    """A protocol-scoped observation, not a verified physical-device identity.
 
-    The identifier is scoped by protocol. Two protocols discovering the same
-    physical device remain separate records until a consumer can correlate them
-    using stronger evidence.
+    The identifier is scoped by protocol. Observations from different protocols
+    remain independent; consumers may correlate them using stronger evidence.
     """
 
     protocol: str
@@ -62,4 +61,4 @@ class DiscoveryEvent:
     """A lifecycle event for a discovered device."""
 
     state: DiscoveryState
-    device: Device
+    observation: DiscoveryObservation

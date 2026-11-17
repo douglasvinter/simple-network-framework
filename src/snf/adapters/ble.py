@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any, Literal, Protocol
 
-from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 
 class _Addressable(Protocol):
@@ -47,12 +47,12 @@ class BLEPlugin:
         self._scanner: Any = None
         self._events: asyncio.Queue[DiscoveryEvent | None] = asyncio.Queue()
         self._last_seen: dict[str, float] = {}
-        self._last_emitted: dict[str, Device] = {}
+        self._last_emitted: dict[str, DiscoveryObservation] = {}
         self._expiry_task: asyncio.Task[None] | None = None
         self._running = False
 
     @staticmethod
-    def _to_device(device: _Addressable, advertisement_data: object) -> Device:
+    def _to_device(device: _Addressable, advertisement_data: object) -> DiscoveryObservation:
         """Normalize Bleak's public BLEDevice and AdvertisementData objects."""
         address = str(device.address)
         advertised_name = getattr(advertisement_data, "local_name", None)
@@ -75,7 +75,7 @@ class BLEPlugin:
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
             for uuid in service_uuids
         )
-        return Device(
+        return DiscoveryObservation(
             protocol="ble",
             identifier=address,
             name=str(name),
@@ -155,7 +155,7 @@ class BLEPlugin:
             for address in expired:
                 self._last_seen.pop(address, None)
                 self._last_emitted.pop(address, None)
-                device = Device(
+                device = DiscoveryObservation(
                     protocol=self.name, identifier=address, name=address
                 )
                 await self._events.put(

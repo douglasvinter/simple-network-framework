@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any
 
-from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ class MDNSPlugin:
 
         identifier = f"{service_type}|{name}"
         if state_change is ServiceStateChange.Removed:
-            device = Device(self.name, identifier, name)
+            device = DiscoveryObservation(self.name, identifier, name)
             await self._events.put(DiscoveryEvent(DiscoveryState.REMOVED, device))
             return
 
@@ -129,7 +129,7 @@ class MDNSPlugin:
             endpoints=endpoints,
             metadata={"server": info.server, "properties": properties},
         )
-        device = Device(
+        device = DiscoveryObservation(
             protocol=self.name,
             identifier=identifier,
             name=name,

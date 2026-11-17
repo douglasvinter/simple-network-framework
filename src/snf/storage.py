@@ -1,4 +1,4 @@
-"""Storage contract for historical device records.
+"""Storage contract for historical discovery observations.
 
 Storage is independent from the live discovery registry. A REMOVED event
 does not delete a remembered device.
@@ -8,37 +8,37 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from snf.models import Device
+from snf.models import DiscoveryObservation
 
 
-class InventoryStorage(Protocol):
+class ObservationStorage(Protocol):
     """Asynchronous key/value storage keyed by (protocol, identifier)."""
 
-    async def get(self, protocol: str, identifier: str) -> Device | None: ...
+    async def get(self, protocol: str, identifier: str) -> DiscoveryObservation | None: ...
 
-    async def upsert(self, device: Device) -> None: ...
+    async def upsert(self, device: DiscoveryObservation) -> None: ...
 
     async def remove(self, protocol: str, identifier: str) -> None: ...
 
-    async def snapshot(self, *, protocol: str | None = None) -> tuple[Device, ...]: ...
+    async def snapshot(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]: ...
 
 
-class InMemoryStorage(InventoryStorage):
+class InMemoryStorage(ObservationStorage):
     """Reference storage driver; records survive only as long as this instance."""
 
     def __init__(self) -> None:
-        self._devices: dict[tuple[str, str], Device] = {}
+        self._observations: dict[tuple[str, str], DiscoveryObservation] = {}
 
-    async def get(self, protocol: str, identifier: str) -> Device | None:
-        return self._devices.get((protocol, identifier))
+    async def get(self, protocol: str, identifier: str) -> DiscoveryObservation | None:
+        return self._observations.get((protocol, identifier))
 
-    async def upsert(self, device: Device) -> None:
-        self._devices[device.identity] = device
+    async def upsert(self, device: DiscoveryObservation) -> None:
+        self._observations[device.identity] = device
 
     async def remove(self, protocol: str, identifier: str) -> None:
-        self._devices.pop((protocol, identifier), None)
+        self._observations.pop((protocol, identifier), None)
 
-    async def snapshot(self, *, protocol: str | None = None) -> tuple[Device, ...]:
+    async def snapshot(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]:
         if protocol is None:
-            return tuple(self._devices.values())
-        return tuple(device for device in self._devices.values() if device.protocol == protocol)
+            return tuple(self._observations.values())
+        return tuple(device for device in self._observations.values() if device.protocol == protocol)

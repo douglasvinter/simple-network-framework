@@ -10,24 +10,24 @@ from typing import TYPE_CHECKING
 
 from snf.models import DiscoveryEvent, DiscoveryState
 from snf.plugins import DiscoveryPlugin
-from snf.registry import DeviceRegistry
-from snf.storage import InventoryStorage
+from snf.registry import ObservationRegistry
+from snf.storage import ObservationStorage
 
 if TYPE_CHECKING:
-    from snf.models import Device
+    from snf.models import DiscoveryObservation
 
 _LOGGER = logging.getLogger(__name__)
 _DONE = object()
 
 
 class DiscoveryEngine:
-    """Run protocol plugins concurrently and maintain a unified inventory."""
+    """Run protocol plugins concurrently and maintain live observations."""
 
     def __init__(
         self,
         plugins: Iterable[DiscoveryPlugin],
         *,
-        storage: InventoryStorage,
+        storage: ObservationStorage,
         dedupe_cache_size: int = 4096,
         strict: bool = False,
     ) -> None:
@@ -39,25 +39,25 @@ class DiscoveryEngine:
             raise ValueError("Only one instance of each protocol plugin is allowed")
         if dedupe_cache_size < 1:
             raise ValueError("dedupe_cache_size must be at least 1")
-        self._registry = DeviceRegistry(max_entries=dedupe_cache_size)
+        self._registry = ObservationRegistry(max_entries=dedupe_cache_size)
         self.storage = storage
         self._started = False
 
     @property
-    def devices(self) -> tuple[Device, ...]:
-        """Return the current in-memory device inventory as an immutable snapshot."""
+    def observations(self) -> tuple[DiscoveryObservation, ...]:
+        """Return an immutable snapshot of live discovery observations."""
         return self.snapshot()
 
-    def snapshot(self, *, protocol: str | None = None) -> tuple[Device, ...]:
-        """Return a point-in-time inventory snapshot, optionally by protocol."""
+    def snapshot(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]:
+        """Return a point-in-time observation snapshot, optionally by protocol."""
         return self._registry.snapshot(protocol=protocol)
 
-    def get_device(self, protocol: str, identifier: str) -> Device | None:
-        """Look up a device by its protocol-scoped identifier."""
+    def get_observation(self, protocol: str, identifier: str) -> DiscoveryObservation | None:
+        """Look up an observation by its protocol-scoped identifier."""
         return self._registry.get(protocol, identifier)
 
-    async def saved_devices(self, *, protocol: str | None = None) -> tuple[Device, ...]:
-        """Read remembered devices from the configured storage backend."""
+    async def saved_observations(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]:
+        """Read remembered observations from the configured storage backend."""
         return await self.storage.snapshot(protocol=protocol)
 
     async def __aenter__(self) -> DiscoveryEngine:
@@ -131,7 +131,7 @@ class DiscoveryEngine:
                     "Plugin %s yielded %s device %s",
                     plugin.name,
                     event.state.value,
-                    event.device.identifier,
+                    event.observation.identifier,
                 )
                 await queue.put(event)
         except asyncio.CancelledError:
@@ -144,7 +144,7 @@ class DiscoveryEngine:
             await queue.put(_DONE)
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
-        """Merge plugin streams and update the in-memory device inventory."""
+        """Merge plugin streams and update the live observation registry."""
         if not self._started:
             raise RuntimeError("Use DiscoveryEngine as an async context manager first")
         if not self._active_plugins:
@@ -166,7 +166,7 @@ class DiscoveryEngine:
                 normalized = self._registry.process(item)
                 if normalized is not None:
                     if normalized.state is not DiscoveryState.REMOVED:
-                        await self.storage.upsert(normalized.device)
+                        await self.storage.upsert(normalized.observation)
                     yield normalized
         finally:
             for task in tasks:

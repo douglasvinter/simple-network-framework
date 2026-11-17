@@ -7,7 +7,7 @@ import shutil
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
-from snf.models import Device, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
 
 
 class SLPPlugin:
@@ -73,7 +73,7 @@ class SLPPlugin:
         self._stop_event.clear()
 
     @staticmethod
-    def _to_device(service_url: str) -> Device:
+    def _to_device(service_url: str) -> DiscoveryObservation:
         value = service_url.strip()
         lifetime: str | None = None
         if "," in value:
@@ -83,7 +83,7 @@ class SLPPlugin:
 
         prefix, separator, endpoint_value = value.partition("://")
         if not separator:
-            return Device(
+            return DiscoveryObservation(
                 protocol="slp", identifier=value, name=value,
                 metadata={"url": value, "lifetime": lifetime},
             )
@@ -95,7 +95,7 @@ class SLPPlugin:
         service = Service(
             name=value, service_type=service_type or None, endpoints=endpoints
         )
-        return Device(
+        return DiscoveryObservation(
             protocol="slp", identifier=value, name=value, endpoints=endpoints,
             services=(service,), metadata={"url": value, "lifetime": lifetime},
         )
