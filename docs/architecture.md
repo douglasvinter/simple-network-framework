@@ -1,6 +1,6 @@
 # Architecture
 
-Current implementation (PR #8). [ADR](adr-python-first-network-framework.md) explains decisions and planned scope; [Developer Guide](developer-guide.md) shows usage.
+Current implementation. [ADR](adr-python-first-network-framework.md) explains decisions and planned scope; [Developer Guide](developer-guide.md) shows usage.
 
 ```text
 Python clients ───────┐
@@ -30,6 +30,7 @@ When mounted at `/network`:
 | --- | --- |
 | `GET /network/discoveries` | Live observations; optional `?protocol=mdns` |
 | `GET /network/discoveries/map` | Observations indexed by protocol and identifier |
+| `GET /network/entities` | Read-only entity projection, optional protocol filter |
 | `GET /network/discoveries/events` | Future-only SSE stream |
 | `GET /network/health` | UTC timestamp, consumer status, observation count, protocols |
 
@@ -37,10 +38,10 @@ When mounted at `/network`:
 
 ## Identity and limitations
 
-The map is **not a physical-device inventory**. One TV may have several SSDP and mDNS records. Do not merge by IP, name, or BLE address alone; BLE privacy addresses may rotate. SSDP observation ports may be UDP response-source ports rather than advertised service ports. `metadata.location` contains the advertised description URL, not a verified control endpoint.
+Neither map nor entity projection is a verified physical-device inventory. SSDP observations with matching valid USN UUIDs are grouped; all others remain separate. Entity IDs use protocol-qualified identity (for example, `ble:AA:BB`); entity responses include observation references rather than duplicating full observation payloads. Full evidence remains available through `/discoveries`. One TV may have several SSDP and mDNS records. Do not merge by IP, name, or BLE address alone; BLE privacy addresses may rotate. SSDP observation ports may be UDP response-source ports rather than advertised service ports. `metadata.location` contains the advertised description URL, not a verified control endpoint.
 
 Implemented: discovery, normalization, live/historical observation contracts, background runtime, subscriptions, REST/SSE.
 
-Deferred: protocol inspection, entity correlation, Bluetooth Classic, generic interactions/pairing, durable entity reconciliation. Vendor-specific automation remains application-owned.
+Deferred: protocol inspection, cross-protocol correlation, Bluetooth Classic, generic interactions/pairing, durable entity reconciliation. Vendor-specific automation remains application-owned.
 
 The host owns logging, server security, and lifecycle. Bind the example API to localhost unless access controls are configured.
