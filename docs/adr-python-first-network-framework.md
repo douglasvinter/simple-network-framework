@@ -14,7 +14,7 @@ The separate SHA application subsequently introduced a background `DiscoveryMana
 
 **SNF is an embeddable, Python-first network framework.** Its core functionality is available through Python APIs without a server. An **optional** FastAPI adapter exposes the same running framework instance over HTTP; it neither owns networking behavior nor creates an independent discovery state.
 
-SNF owns protocol discovery, normalized observations, network-entity resolution, service aggregation, runtime lifecycle, event fan-out, storage contracts, **generic service consumption and connection/session management**, and **protocol-level pairing/unpairing where supported**. SNF provides protocol capabilities, not vendor-specific device behavior. Vendor-specific integrations, device commands, application workflows, and home-automation rules belong to SHA or another consuming application.
+SNF owns protocol discovery, **protocol-aware inspection and capability resolution**, normalized observations, network-entity resolution, enriched service inventory, runtime lifecycle, event fan-out, storage contracts, **generic service consumption and connection/session management**, and **protocol-level pairing/unpairing where supported**. SNF provides protocol capabilities, not vendor-specific device behavior. Vendor-specific integrations, device commands, application workflows, and home-automation rules belong to SHA or another consuming application.
 
 ### Boundaries
 
@@ -24,6 +24,7 @@ SNF owns protocol discovery, normalized observations, network-entity resolution,
 | Live observation registry and lifecycle | Owns | Reads/subscribes |
 | Network identity resolution and evidence | Owns | May add application knowledge |
 | Service/endpoint aggregation | Owns | Uses |
+| Protocol-aware inspection and capability resolution | Fetches/parses supported service descriptions and inspects supported characteristics | Uses enriched capabilities and configures inspection policy |
 | Generic service consumption and protocol operations | Owns protocol-level adapters/contracts | Chooses services and interprets results |
 | Pairing/unpairing, connection and session lifecycle | Owns when supported by protocol/backend | Requests operations and applies user policy |
 | Vendor-specific device integrations and commands | Does not own | Owns |
@@ -59,6 +60,40 @@ A convenience application factory may also be provided. The host owns runtime st
 - Ensure subscriber registration/unregistration and shutdown are cancellation-safe.
 - Document ordering and event types; avoid claiming delivery durability or replay.
 - Do not conflate `REMOVED` observation events with proof that physical hardware is offline.
+
+### Discovery, inspection, and interaction: distinct responsibilities
+
+**Discovery observations are inputs to SNF's inventory, not its final product.** The framework must enrich protocol advertisements into an inventory of network entities, advertised services, supported protocol capabilities, endpoints, identity evidence, and inspection state. Three operations have distinct contracts and lifecycle:
+
+1. **Discovery:** observe announcements, advertisements, and service locators without assuming they are verified, reachable, or controllable.
+2. **Inspection / resolution:** fetch or query supported protocol descriptions, enumerate services/capabilities, and enrich inventory with provenance and inspection status. Inspection is a first-class SNF capability, not vendor application logic.
+3. **Interaction:** explicitly consume supported services, invoke standardized actions, read/write characteristics, connect/disconnect, and pair/unpair where supported. Inspection does not itself authorize state-changing operations.
+
+**SSDP / UPnP enrichment:** When an SSDP observation supplies a `LOCATION` URL, a configured inspector may retrieve the UPnP device description XML; parse UDN, device type, manufacturer, model, embedded devices, service types, service IDs, and description/control/event URLs; resolve SCPD descriptions to learn actions, arguments, and state variables; and place these structured capabilities in the SNF inventory. Service control remains an explicit operation. Preserve the raw advertisement and the source URL as evidence, not as a trusted identity or unrestricted request destination. Apply URL/redirect validation, local-network targeting policy, request timeouts, bounded response sizes, safe XML parsing, and appropriate caching/retries.
+
+**BLE / GATT enrichment:** BLE advertisements identify candidate peripherals, not their full capabilities. When explicitly requested or permitted by an inspection policy, a supported BLE backend may connect, enumerate GATT services, characteristics, descriptors and properties, and read appropriate standard characteristics (for example, Device Information Service). Record UUIDs, characteristic properties, observed values where safe, inspection status, and provenance in SNF inventory. Reads may require authentication and can have device-specific side effects; do not automatically pair, write, subscribe to notifications, or assume every peripheral can be inspected. Connections must have bounded concurrency, timeouts, and reliable cleanup. BLE identity may be unstable because of privacy address rotation.
+
+**Other discovery protocols:** mDNS/DNS-SD and OpenSLP can provide service types, endpoints, and metadata; protocol-specific inspectors may enrich services when a supported description or interrogation mechanism exists. Do not pretend the discovery protocol itself defines universal service actions or pairing.
+
+**Inventory projection (conceptual, not an implemented schema):**
+
+```text
+NetworkEntity
+  identity / correlation evidence
+  protocol observations (raw evidence and lifecycle)
+  manufacturer / model (when learned)
+  endpoints
+  services
+    service type / source / description
+    supported standardized actions or GATT characteristics
+    required access and operation support
+  inspection status / errors / last inspection
+  availability evidence (not proof of physical online state)
+```
+
+Maintain distinct states for discovery, inspection, and interaction. Inspection failures must not erase valid discovery observations or be confused with device removal. Cache invalidation, reinspection, stale capabilities, and restart reconciliation need explicit semantics. SNF must expose the enriched inventory to Python clients and, optionally, read-only HTTP endpoints; the current `DiscoveryObservation` model remains available unchanged until a deliberate migration.
+
+**SNF vs SHA:** SNF understands UPnP actions, GATT characteristics, generic protocol operations, and capability metadata. SHA understands the vendor/model-specific meaning of those operations, including proprietary payloads, app launching, and appliance workflows. A writable characteristic or advertised action is not proof of a universally meaningful device command.
 
 ### Identity and entity resolution (subsequent phase)
 
@@ -113,10 +148,10 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 1. **Architecture review (this ADR):** agree on boundaries, ownership, event and lifecycle contracts.
 2. **Consolidation PR:** migrate SHA's generic runtime, subscriber fan-out, service projection, and HTTP schemas/routes into SNF. Preserve behavior; do not implement correlation or SQL in this PR.
-3. **Entity-resolution PR:** deterministic, evidence-based protocol consolidation and cross-protocol correlation with provenance and lifecycle tests.
+3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
 4. **Persistence PR:** explicit durable-inventory and reconciliation contracts; add SQLite only after contract tests.
 5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls.
-6. **Real-device validation:** SSDP, mDNS, OpenSLP, BLE, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
+6. **Real-device validation:** SSDP LOCATION/SCPD enrichment, BLE GATT inspection, mDNS, OpenSLP, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
 7. **Retire SHA only after parity:** verify no reusable code or documentation remains solely there; archive before considering deletion.
 
 ## Acceptance criteria for consolidation
@@ -138,7 +173,8 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 2. **Make SNF a mandatory standalone server:** rejected because it compromises embedding and introduces an unnecessary process boundary.
 3. **Make FastAPI mandatory:** rejected because core Python consumers do not need an HTTP stack.
 4. **Move correlation into SHA:** rejected as the default because reusable network-entity resolution belongs in SNF; application-specific interpretation remains outside it.
-5. **Implement migration, correlation, and persistence together:** rejected due to excessive behavior and contract changes in one PR.
+5. **Implement migration, inspection, correlation, and persistence together:** rejected due to excessive behavior and contract changes in one PR.
+6. **Treat advertisements as the final inventory:** rejected because the framework must resolve and describe actual protocol services and capabilities, while retaining raw observations as evidence.
 
 ## Consequences and risks
 
