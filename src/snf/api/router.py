@@ -92,6 +92,11 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
     @router.get(
         "/discoveries/inspect",
         response_model=InspectionSuccessResponse,
+        include_in_schema=False,
+    )
+    @router.get(
+        "/discoveries/inspect/upnp",
+        response_model=InspectionSuccessResponse,
         responses={
             404: {"model": InspectionErrorResponse},
             422: {"model": InspectionErrorResponse},
