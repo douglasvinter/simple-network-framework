@@ -122,3 +122,71 @@ async def test_single_observation_inspection():
         result = await inspector.inspect_observation(observation)
     assert result.friendly_name == "Living Room TV"
     mocked.assert_awaited_once_with(location)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,body", [
+    (302, b""),
+    (404, b"missing"),
+    (200, b"<html>not UPnP</html>"),
+])
+async def test_http_rejects_redirects_non_success_and_vendor_xml(status, body):
+    async def handler(reader, writer):
+        await reader.read(4096)
+        response = (f"HTTP/1.1 {status} Test\\r\\nContent-Length: {len(body)}\\r\\n"
+                    "Location: http://example.com/\\r\\nConnection: close\\r\\n\\r\\n").encode()
+        writer.write(response + body)
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    server = await asyncio.start_server(handler, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        with patch("snf.inspection.upnp._local_address", return_value=True):
+            with pytest.raises(UPnPInspectionError):
+                await UPnPInspector().inspect(f"http://127.0.0.1:{port}/desc")
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_http_rejects_oversized_chunked_body():
+    async def handler(reader, writer):
+        await reader.read(4096)
+        writer.write(b"HTTP/1.1 200 OK\\r\\nTransfer-Encoding: chunked\\r\\n"
+                     b"Connection: close\\r\\n\\r\\n"
+                     b"14\\r\\n01234567890123456789\\r\\n0\\r\\n\\r\\n")
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    server = await asyncio.start_server(handler, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        with patch("snf.inspection.upnp._local_address", return_value=True):
+            with pytest.raises(UPnPInspectionError, match="byte limit"):
+                await UPnPInspector(max_bytes=10).inspect(f"http://127.0.0.1:{port}/desc")
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_http_timeout_does_not_block_discovery():
+    async def handler(reader, writer):
+        await reader.read(4096)
+        await asyncio.sleep(0.2)
+        writer.close()
+        await writer.wait_closed()
+
+    server = await asyncio.start_server(handler, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        with patch("snf.inspection.upnp._local_address", return_value=True):
+            with pytest.raises(UPnPInspectionError, match="fetch failed"):
+                await UPnPInspector(timeout=0.03).inspect(f"http://127.0.0.1:{port}/desc")
+    finally:
+        server.close()
+        await server.wait_closed()
