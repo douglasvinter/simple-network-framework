@@ -58,8 +58,8 @@ async def test_private_lan_http_integration():
     # the HTTP path via a temporary override of the local-address policy.
     async def handler(reader, writer):
         await reader.read(4096)
-        writer.write(b"HTTP/1.1 200 OK\\r\\nContent-Length: " + str(len(XML)).encode()
-                     + b"\\r\\nConnection: close\\r\\n\\r\\n" + XML)
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: " + str(len(XML)).encode()
+                     + b"\r\nConnection: close\r\n\r\n" + XML)
         await writer.drain()
         writer.close()
         await writer.wait_closed()

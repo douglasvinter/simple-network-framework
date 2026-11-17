@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import aiohttp
 import ipaddress
 import socket
 import xml.etree.ElementTree as ET
@@ -134,7 +135,6 @@ class UPnPInspector:
                     addresses = {item[4][0] for item in infos}
                     if not addresses or not all(_local_address(ip) for ip in addresses):
                         raise UPnPInspectionError("LOCATION must resolve exclusively to private LAN addresses")
-                    import aiohttp
                     connector = aiohttp.TCPConnector(resolver=_PinnedResolver(infos), use_dns_cache=False)
                     async with aiohttp.ClientSession(connector=connector, trust_env=False) as session:
                         async with session.get(location, allow_redirects=False) as response:
