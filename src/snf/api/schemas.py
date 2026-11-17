@@ -87,3 +87,20 @@ class InspectionSuccessResponse(UPnPDeviceResponse):
 class InspectionErrorResponse(BaseModel):
     device: UPnPDeviceResponse | None
     error: InspectionErrorDetail
+
+
+class MDNSInspectionResponse(BaseModel):
+    """Resolved DNS-SD service instance, not a physical-device identity."""
+
+    instance_name: str
+    service_type: str
+    server: str | None
+    port: int | None
+    addresses: tuple[str, ...]
+    properties: dict[str, str]
+    error: dict[str, str] = Field(default_factory=dict)
+
+
+class MDNSInspectionErrorResponse(BaseModel):
+    service: MDNSInspectionResponse | None = None
+    error: InspectionErrorDetail
