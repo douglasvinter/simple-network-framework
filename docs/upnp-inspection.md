@@ -17,7 +17,7 @@ To inspect multiple SSDP advertisements, `inspect_observations(observations)` re
 
 ## HTTP API
 
-`GET /network/discoveries/inspect?identifier=<url-encoded SSDP USN>`
+`GET /network/discoveries/inspect/upnp?identifier=<url-encoded SSDP USN>`
 
 This is an **explicit network operation**, not a background enrichment job. Use an identifier returned by `GET /network/discoveries?protocol=ssdp`. Responses are structured UPnP device descriptions with an `error` key. Unknown identifiers return 404; unsupported or malformed descriptions return 422; upstream fetch failures return 502; unavailable SSDP protocol returns 422; an unstarted runtime returns 503.
 

@@ -14,10 +14,13 @@ from snf.api.schemas import (
     DiscoveryObservationResponse,
     InspectionErrorResponse,
     InspectionSuccessResponse,
+    MDNSInspectionErrorResponse,
+    MDNSInspectionResponse,
     NetworkEntityResponse,
     UPnPDeviceResponse,
 )
 from snf.entities import NetworkEntity
+from snf.inspection.mdns import MDNSInspectionError, MDNSInspector
 from snf.inspection.ssdp_metadata import SSDPMetadataParser
 from snf.inspection.upnp import UPnPInspectionError, UPnPInspector
 from snf.models import DiscoveryObservation
@@ -87,7 +90,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @router.get(
-        "/discoveries/inspect",
+        "/discoveries/inspect/upnp",
         response_model=InspectionSuccessResponse,
         responses={
             404: {"model": InspectionErrorResponse},
@@ -141,6 +144,55 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
                 "MALFORMED_DESCRIPTION",
             } else 502
             return failure(status, exc.code, str(exc), observation, exc.raw_response)
+
+    @router.get(
+        "/discoveries/inspect/mdns",
+        response_model=MDNSInspectionResponse,
+        responses={
+            404: {"model": MDNSInspectionErrorResponse},
+            422: {"model": MDNSInspectionErrorResponse},
+            502: {"model": MDNSInspectionErrorResponse},
+            503: {"model": MDNSInspectionErrorResponse},
+        },
+    )
+    async def inspect_mdns(identifier: str | None = None) -> object:
+        """Resolve one existing DNS-SD observation without changing discovery state."""
+
+        def failure(status: int, code: str, message: str) -> JSONResponse:
+            payload = MDNSInspectionErrorResponse(
+                service=None, error={"code": code, "message": message}
+            )
+            return JSONResponse(status_code=status, content=payload.model_dump())
+
+        if identifier is None or not identifier.strip():
+            return failure(422, "INVALID_IDENTIFIER", "An mDNS identifier is required")
+        try:
+            runtime.validate_protocol("mdns")
+        except ValueError as exc:
+            return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
+        try:
+            observations = runtime.snapshot(protocol="mdns")
+        except RuntimeError as exc:
+            return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
+        observation = next(
+            (item for item in observations if item.identifier == identifier), None
+        )
+        if observation is None:
+            return failure(404, "OBSERVATION_NOT_FOUND", "mDNS observation not found")
+        try:
+            details = await MDNSInspector().inspect_observation(observation)
+        except MDNSInspectionError as exc:
+            status = 422 if exc.code == "INVALID_OBSERVATION" else 502
+            return failure(status, exc.code, str(exc))
+        return MDNSInspectionResponse.model_validate({
+            "instance_name": details.instance_name,
+            "service_type": details.service_type,
+            "server": details.server,
+            "port": details.port,
+            "addresses": details.addresses,
+            "properties": details.properties,
+            "error": {},
+        })
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
     async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:
