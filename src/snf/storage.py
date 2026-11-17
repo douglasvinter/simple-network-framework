@@ -20,7 +20,9 @@ class ObservationStorage(Protocol):
 
     async def remove(self, protocol: str, identifier: str) -> None: ...
 
-    async def snapshot(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]: ...
+    async def snapshot(
+        self, *, protocol: str | None = None
+    ) -> tuple[DiscoveryObservation, ...]: ...
 
 
 class InMemoryStorage(ObservationStorage):
@@ -41,4 +43,8 @@ class InMemoryStorage(ObservationStorage):
     async def snapshot(self, *, protocol: str | None = None) -> tuple[DiscoveryObservation, ...]:
         if protocol is None:
             return tuple(self._observations.values())
-        return tuple(device for device in self._observations.values() if device.protocol == protocol)
+        return tuple(
+            observation
+            for observation in self._observations.values()
+            if observation.protocol == protocol
+        )
