@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 from importlib.util import find_spec
 from typing import Any, Literal, Protocol
 
-from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, Endpoint, Service
 
 
 class _Addressable(Protocol):
