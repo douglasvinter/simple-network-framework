@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from snf.inspection.upnp import UPnPInspectionError, UPnPInspector, parse_description
+from snf.inspection.upnp import (
+    UPnPInspectionError,
+    UPnPInspector,
+    location_from_observation,
+    parse_description,
+)
 from snf.models import DiscoveryObservation, Endpoint
 
 XML = b"""<?xml version="1.0"?>
@@ -75,9 +80,6 @@ async def test_private_lan_http_integration():
     finally:
         server.close()
         await server.wait_closed()
-
-
-from snf.inspection.upnp import location_from_observation
 
 
 def test_location_from_ssdp_observation():
