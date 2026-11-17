@@ -77,8 +77,16 @@ def test_protocol_separator_does_not_collide():
 
 def test_same_service_with_changed_metadata_is_deduplicated():
     records = (
-        DiscoveryObservation("ssdp", "a", "TV", services=(Service("root", metadata={"age": 10}),), metadata={"usn": UDN}),
-        DiscoveryObservation("ssdp", "b", "TV", services=(Service("root", metadata={"age": 20}),), metadata={"usn": UDN}),
+        DiscoveryObservation(
+            "ssdp", "a", "TV",
+            services=(Service("root", metadata={"age": 10}),),
+            metadata={"usn": UDN},
+        ),
+        DiscoveryObservation(
+            "ssdp", "b", "TV",
+            services=(Service("root", metadata={"age": 20}),),
+            metadata={"usn": UDN},
+        ),
     )
     assert len(EntityResolver().resolve(records)[0].services) == 1
 
