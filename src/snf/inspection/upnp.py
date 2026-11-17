@@ -133,13 +133,24 @@ def parse_description(
 
 def _local_address(address: str) -> bool:
     ip = ipaddress.ip_address(address)
-    return not (ip.is_global or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved)
+    return not any((
+        ip.is_global, ip.is_loopback, ip.is_link_local,
+        ip.is_multicast, ip.is_unspecified, ip.is_reserved,
+    ))
 
 
 def _validate_url(url: str) -> tuple[str, int, str]:
     parts = urlsplit(url)
-    if parts.scheme != "http" or not parts.hostname or parts.username or parts.password or parts.fragment:
-        raise UPnPInspectionError("Only plain HTTP device descriptions without credentials are allowed")
+    if (
+        parts.scheme != "http"
+        or not parts.hostname
+        or parts.username
+        or parts.password
+        or parts.fragment
+    ):
+        raise UPnPInspectionError(
+            "Only plain HTTP device descriptions without credentials are allowed"
+        )
     try:
         port = parts.port or HTTP_DEFAULT_PORT
     except ValueError as exc:
@@ -239,7 +250,9 @@ class UPnPInspector:
                         host, port, type=socket.SOCK_STREAM)
                     addresses = {item[4][0] for item in infos}
                     if not addresses or not all(_local_address(ip) for ip in addresses):
-                        raise UPnPInspectionError("LOCATION must resolve exclusively to private LAN addresses")
+                        raise UPnPInspectionError(
+                            "LOCATION must resolve exclusively to private LAN addresses"
+                        )
                     normalized = {str(ipaddress.ip_address(ip)) for ip in addresses}
                     if expected_addresses is not None and (
                         not expected_addresses or not normalized.issubset(expected_addresses)
@@ -248,19 +261,36 @@ class UPnPInspector:
                             "LOCATION address does not match the SSDP source address",
                             code="SOURCE_ADDRESS_MISMATCH",
                         )
-                    connector = aiohttp.TCPConnector(resolver=_PinnedResolver(infos), use_dns_cache=False)
-                    async with aiohttp.ClientSession(connector=connector, trust_env=False) as session:
+                    connector = aiohttp.TCPConnector(
+                        resolver=_PinnedResolver(infos), use_dns_cache=False
+                    )
+                    async with aiohttp.ClientSession(
+                        connector=connector, trust_env=False
+                    ) as session:
                         async with session.get(location, allow_redirects=False) as response:
                             if response.status != HTTPStatus.OK:
-                                raise UPnPInspectionError(f"Unexpected HTTP status: {response.status}")
-                            if response.content_length is not None and response.content_length > self.max_bytes:
-                                raise UPnPInspectionError("Description exceeds byte limit", code="RESPONSE_TOO_LARGE")
+                                raise UPnPInspectionError(
+                                    f"Unexpected HTTP status: {response.status}"
+                                )
+                            if (
+                                response.content_length is not None
+                                and response.content_length > self.max_bytes
+                            ):
+                                raise UPnPInspectionError(
+                                    "Description exceeds byte limit",
+                                    code="RESPONSE_TOO_LARGE",
+                                )
                             content = await response.content.read(self.max_bytes + 1)
                             if len(content) > self.max_bytes:
-                                raise UPnPInspectionError("Description exceeds byte limit", code="RESPONSE_TOO_LARGE")
+                                raise UPnPInspectionError(
+                                    "Description exceeds byte limit",
+                                    code="RESPONSE_TOO_LARGE",
+                                )
                             return parse_description(content, location, max_depth=self.max_depth)
             except (TimeoutError, OSError, aiohttp.ClientError) as exc:
-                raise UPnPInspectionError("UPnP description fetch failed", code="FETCH_FAILED") from exc
+                raise UPnPInspectionError(
+                    "UPnP description fetch failed", code="FETCH_FAILED"
+                ) from exc
 
 
 class _PinnedResolver:
