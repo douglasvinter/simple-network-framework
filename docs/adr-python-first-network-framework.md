@@ -1,20 +1,20 @@
 # ADR: Python-first network framework and optional HTTP adapter
 
 **Status:** Proposed — review before implementation  
-**Scope:** SNF architecture and migration of reusable functionality from SHA  
+**Scope:** SNF architecture and consolidation of reusable networking capabilities  
 **Date:** 2026-11-16
 
 ## Context
 
 SNF currently provides protocol adapters, `DiscoveryEngine`, `DiscoveryObservation`, `ObservationRegistry`, and `ObservationStorage`. Its engine runs plugin pumps while a caller iterates `engine.discover()`. The original design intentionally excludes cross-protocol identity correlation and HTTP interfaces.
 
-The separate SHA application subsequently introduced a background `DiscoveryManager`, subscriber fan-out, a `NetworkDiscoveryService`, and FastAPI REST/SSE endpoints. These are reusable networking capabilities rather than home-automation domain behavior. Keeping them outside SNF makes consumers reproduce framework infrastructure.
+A separate application implementation demonstrated the need for a background discovery runtime, subscriber fan-out, a networking service facade, and FastAPI REST/SSE endpoints. These are reusable networking capabilities; keeping them outside SNF would make consumers reproduce framework infrastructure.
 
 ## Decision
 
 **SNF is an embeddable, Python-first network framework.** Its core functionality is available through Python APIs without a server. An **optional** FastAPI adapter exposes the same running framework instance over HTTP; it neither owns networking behavior nor creates an independent discovery state.
 
-SNF owns protocol discovery, **protocol-aware inspection and capability resolution**, normalized observations, network-entity resolution, enriched service inventory, runtime lifecycle, event fan-out, storage contracts, **generic service consumption and connection/session management**, and **protocol-level pairing/unpairing where supported**. SNF provides protocol capabilities, not vendor-specific device behavior. Vendor-specific integrations, device commands, application workflows, and home-automation rules belong to SHA or another consuming application.
+SNF owns protocol discovery, **protocol-aware inspection and capability resolution**, normalized observations, network-entity resolution, enriched service inventory, runtime lifecycle, event fan-out, storage contracts, **generic service consumption and connection/session management**, and **protocol-level pairing/unpairing where supported**. SNF provides protocol capabilities, not vendor-specific device behavior. Vendor-specific integrations, device commands, application workflows, and home-automation rules belong to consuming applications.
 
 ### Boundaries
 
@@ -55,7 +55,7 @@ A convenience application factory may also be provided. The host owns runtime st
 
 ### Event subscription semantics
 
-- Document whether subscriptions are future-only or include an initial snapshot; initial migration preserves SHA's future-only SSE semantics.
+- Document whether subscriptions are future-only or include an initial snapshot; initial migration preserves future-only SSE semantics.
 - Define behavior for bounded buffers and slow consumers (initial migration: disconnect slow subscriber rather than block discovery).
 - Ensure subscriber registration/unregistration and shutdown are cancellation-safe.
 - Document ordering and event types; avoid claiming delivery durability or replay.
@@ -95,7 +95,7 @@ NetworkEntity
 
 Maintain distinct states for discovery, inspection, and interaction. Inspection failures must not erase valid discovery observations or be confused with device removal. Cache invalidation, reinspection, stale capabilities, and restart reconciliation need explicit semantics. SNF must expose the enriched inventory to Python clients and, optionally, read-only HTTP endpoints; the current `DiscoveryObservation` model remains available unchanged until a deliberate migration.
 
-**SNF vs SHA:** SNF understands UPnP actions, BLE GATT characteristics, Bluetooth Classic SDP/profiles, generic protocol operations, and capability metadata. SHA understands the vendor/model-specific meaning of those operations, including proprietary payloads, app launching, and appliance workflows. A writable characteristic or advertised action is not proof of a universally meaningful device command.
+**Framework/application boundary:** SNF understands UPnP actions, BLE GATT characteristics, Bluetooth Classic SDP/profiles, generic protocol operations, and capability metadata. Consuming applications interpret vendor/model-specific semantics, including proprietary payloads, app launching, and appliance workflows. A writable characteristic or advertised action is not proof of a universally meaningful device command.
 
 ### Identity and entity resolution (subsequent phase)
 
@@ -119,7 +119,7 @@ Discovery is not the framework's final boundary. SNF will expose **generic netwo
 
 **Interaction operations must be explicit and opt-in.** Discovery or a read-only inventory request must never implicitly pair, unpair, authenticate, open sessions, or invoke a device command. Connection and pairing APIs require clear authorization and security boundaries; exposing them over HTTP requires authentication/authorization, input validation, and conservative network binding. Do not expose an unrestricted arbitrary-target request proxy or command executor.
 
-**Vendor boundary:** SNF can invoke a standardized UPnP action, communicate with a supported generic protocol service, or pair a Bluetooth device. SHA interprets the device's vendor/model-specific semantics (for example, launching an app on a particular TV, selecting an air-conditioner mode, or handling proprietary authentication). Generic protocol support does not imply SNF implements every vendor command.
+**Vendor boundary:** SNF can invoke a standardized UPnP action, communicate with a supported generic protocol service, or pair a Bluetooth device. A consuming application interprets the device's vendor/model-specific semantics (for example, launching an app on a particular TV, selecting an air-conditioner mode, or handling proprietary authentication). Generic protocol support does not imply SNF implements every vendor command.
 
 These are **planned contracts**, not implemented functionality. Design each interaction API against real adapter/backend capabilities rather than assuming every discovered service is controllable.
 
@@ -135,7 +135,7 @@ Keep the base package usable without FastAPI, SSE, or SQL libraries. Provide an 
 
 ### HTTP surface (initial migration)
 
-Preserve the existing SHA semantics where practical:
+Preserve the initial read-only HTTP behavior where practical:
 
 - `GET /network/discoveries` — live observations, optional protocol filter.
 - `GET /network/discoveries/map` — grouped live observations.
@@ -149,32 +149,32 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 ## Implementation sequence
 
 1. **Architecture review (this ADR):** agree on boundaries, ownership, event and lifecycle contracts.
-2. **Consolidation PR:** migrate SHA's generic runtime, subscriber fan-out, service projection, and HTTP schemas/routes into SNF. Preserve behavior; do not implement correlation or SQL in this PR.
+2. **Consolidation PR:** implement the reusable background runtime, subscriber fan-out, service projection, and HTTP schemas/routes in SNF. Preserve behavior; do not implement correlation or SQL in this PR.
 3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration; Bluetooth Classic SDP/profile inspection), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
 4. **Persistence PR:** explicit durable-inventory and reconciliation contracts; add SQLite only after contract tests.
 5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and BLE/Classic pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls. Bluetooth Classic discovery and audio-profile awareness require a backend separate from BLE-only scanning.
 6. **Real-device validation:** SSDP LOCATION/SCPD enrichment, BLE GATT inspection, Bluetooth Classic discovery/SDP/audio-profile detection, mDNS, OpenSLP, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
-7. **Retire SHA only after parity:** verify no reusable code or documentation remains solely there; archive before considering deletion.
+7. **Integration and release readiness:** validate Python and HTTP contracts with independent consumers and real devices before considering a stable package release.
 
 ## Acceptance criteria for consolidation
 
 - Direct Python usage works without installing HTTP dependencies.
 - Optional FastAPI router uses the same runtime and live inventory as Python callers.
 - Only one discovery-consumer task exists per runtime; multiple SSE subscribers do not duplicate discovery.
-- Existing SNF protocol tests and migrated SHA REST/SSE tests pass.
+- Existing SNF protocol tests and new REST/SSE contract tests pass.
 - Event fan-out handles slow clients, disconnects, cancellation, and shutdown.
 - API import has no startup/network side effects.
 - `py.typed` and strict typing checks are considered for published Python consumers.
 - Documentation and examples cover embedding in an existing application.
-- No home-automation-specific classes or dependency on SHA are introduced.
+- No home-automation-specific classes or dependency on a consuming application are introduced.
 - Generic interaction and pairing contracts are explicitly deferred from the consolidation PR, but remain part of SNF's planned scope.
 
 ## Alternatives considered
 
-1. **Leave API/runtime in SHA:** rejected because generic consumers would reimplement networking infrastructure.
+1. **Keep API/runtime in a consuming application:** rejected because generic consumers would reimplement networking infrastructure.
 2. **Make SNF a mandatory standalone server:** rejected because it compromises embedding and introduces an unnecessary process boundary.
 3. **Make FastAPI mandatory:** rejected because core Python consumers do not need an HTTP stack.
-4. **Move correlation into SHA:** rejected as the default because reusable network-entity resolution belongs in SNF; application-specific interpretation remains outside it.
+4. **Move correlation into consuming applications:** rejected as the default because reusable network-entity resolution belongs in SNF; application-specific interpretation remains outside it.
 5. **Implement migration, inspection, correlation, and persistence together:** rejected due to excessive behavior and contract changes in one PR.
 6. **Treat advertisements as the final inventory:** rejected because the framework must resolve and describe actual protocol services and capabilities, while retaining raw observations as evidence.
 
