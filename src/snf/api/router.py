@@ -90,11 +90,6 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @router.get(
-        "/discoveries/inspect",
-        response_model=InspectionSuccessResponse,
-        include_in_schema=False,
-    )
-    @router.get(
         "/discoveries/inspect/upnp",
         response_model=InspectionSuccessResponse,
         responses={
