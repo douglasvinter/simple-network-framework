@@ -250,3 +250,58 @@ async def test_engine_snapshot_filters_protocol_and_preserves_devices_property()
         assert engine.snapshot(protocol="mdns") == (mdns,)
         assert engine.snapshot(protocol="ssdp") == (ssdp,)
         assert engine.snapshot(protocol="slp") == ()
+
+
+def test_registry_eviction_is_not_device_removal():
+    registry = ObservationRegistry(max_entries=1)
+    first = DiscoveryObservation("mdns", "one", "Printer")
+    second = DiscoveryObservation("mdns", "two", "TV")
+
+    assert registry.process_events(DiscoveryEvent(DiscoveryState.ADDED, first)) == (
+        DiscoveryEvent(DiscoveryState.ADDED, first),
+    )
+    assert registry.process_events(DiscoveryEvent(DiscoveryState.ADDED, second)) == (
+        DiscoveryEvent(DiscoveryState.EVICTED, first),
+        DiscoveryEvent(DiscoveryState.ADDED, second),
+    )
+    assert registry.snapshot() == (second,)
+    assert registry.process_events(DiscoveryEvent(DiscoveryState.REMOVED, first)) == ()
+    assert registry.process_events(DiscoveryEvent(DiscoveryState.ADDED, first)) == (
+        DiscoveryEvent(DiscoveryState.EVICTED, second),
+        DiscoveryEvent(DiscoveryState.ADDED, first),
+    )
+
+
+def test_registry_rejects_plugin_generated_eviction():
+    registry = ObservationRegistry(max_entries=1)
+    observation = DiscoveryObservation("mdns", "one", "Printer")
+    with pytest.raises(ValueError, match="registry-generated"):
+        registry.process_events(DiscoveryEvent(DiscoveryState.EVICTED, observation))
+
+
+def test_registry_repeated_observation_does_not_evict():
+    registry = ObservationRegistry(max_entries=1)
+    observation = DiscoveryObservation("mdns", "one", "Printer")
+    registry.process_events(DiscoveryEvent(DiscoveryState.ADDED, observation))
+    assert registry.process_events(DiscoveryEvent(DiscoveryState.ADDED, observation)) == ()
+    assert registry.snapshot() == (observation,)
+
+
+@pytest.mark.asyncio
+async def test_engine_eviction_keeps_remembered_observation():
+    first = DiscoveryObservation("mdns", "one", "Printer")
+    second = DiscoveryObservation("mdns", "two", "TV")
+    plugin = FakePlugin([
+        DiscoveryEvent(DiscoveryState.ADDED, first),
+        DiscoveryEvent(DiscoveryState.ADDED, second),
+    ])
+    storage = InMemoryStorage()
+    async with DiscoveryEngine([plugin], storage=storage, dedupe_cache_size=1) as engine:
+        events = [event async for event in engine.discover()]
+        assert engine.snapshot() == (second,)
+        assert await engine.saved_observations() == (first, second)
+    assert [(event.state, event.observation.identifier) for event in events] == [
+        (DiscoveryState.ADDED, "one"),
+        (DiscoveryState.EVICTED, "one"),
+        (DiscoveryState.ADDED, "two"),
+    ]
