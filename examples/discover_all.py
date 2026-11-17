@@ -6,7 +6,7 @@ import logging
 from snf import DiscoveryEngine, InMemoryStorage, create_plugins
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 logging.getLogger("snf").setLevel(logging.DEBUG)
