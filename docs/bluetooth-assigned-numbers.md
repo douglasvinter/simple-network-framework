@@ -49,3 +49,33 @@ or interpret proprietary payloads.
   it is not a complete worldwide registry of proprietary product models.
 - Vendor-specific advertisement decoding and device control belong in the
   consuming application, not SNF.
+
+## Optional BLE product-family fingerprints
+
+The BLE adapter includes `device_identification` in observation metadata.
+It is `null` unless a supported fingerprint or qualified name hint matches.
+The matching engine does not read characteristics, pair, connect, or decode
+vendor-specific commands.
+
+Initial coverage:
+
+- **Apple/Beats:** the public Theengs AirPods/Beats advertisement-family
+  signature (`company_id=76`, Bleak payload prefix `071901`). The signature
+  identifies an audio *family*, not a specific model. Source:
+  [Theengs APPLEAIRPODS definition](https://github.com/theengs/decoder/blob/development/src/devices/APPLEAIRPODS_json.h).
+- **Sony:** `WH-1000XM3/4/5` or `WF-1000XM3/4/5` advertised names,
+  only alongside Sony's registered company ID (301).
+- **Samsung:** Galaxy Buds advertised-name family, only alongside Samsung's
+  registered company ID (117).
+- **LG:** LG TONE/HBS advertised-name family, only alongside LG's
+  registered company ID (196).
+
+The latter three are **unverified name hints**, not model fingerprints.
+Advertised names and manufacturer IDs can be spoofed, so consumers must not
+use these identifications as authentication or ownership evidence. Unknown
+patterns remain unknown. No PS4/PS5 console or DualShock/DualSense
+identification is claimed: Bluetooth Classic discovery is outside Bleak's
+portable BLE scan contract.
+
+Further product-specific signatures require reproducible public evidence
+and test vectors; manufacturer ID alone is insufficient.
