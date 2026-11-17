@@ -4,7 +4,7 @@
 
 Simple Network Framework (SNF) is an asynchronous Python framework for discovering devices and advertised services on local networks. It normalizes observations from different discovery protocols into a common domain model and maintains a bounded live device inventory and writes observations to an injected storage driver.
 
-SNF is deliberately a discovery and inventory library. It is not a device-control or home-automation platform.
+The currently implemented core provides discovery, inventory, a background runtime, and an optional HTTP adapter. Protocol inspection, generic interaction and correlation are future work defined separately in the architecture decision record. Vendor-specific automation remains outside SNF.
 
 ### In scope
 
@@ -18,24 +18,24 @@ SNF is deliberately a discovery and inventory library. It is not a device-contro
 
 ### Out of scope
 
-- Pairing or unpairing Bluetooth devices.
+- Pairing or unpairing Bluetooth devices (not yet implemented).
 - Establishing general-purpose device sessions or managing connections.
 - Invoking device APIs, launching TV applications, or controlling appliances.
 - Automation rules, schedules, scenes, and workflows.
 - Bundled database drivers, schema management, and retention policies.
 - Automatic correlation of observations from different protocols into one physical device.
 
-These responsibilities can be implemented by a separate consumer such as `simple-home-automation`.
+These deferred generic protocol capabilities belong in future SNF increments; vendor-specific device behavior belongs to consuming applications.
 
 ## 2. High-level architecture
 
-The framework is composed of five cooperating areas:
+The discovery engine has five cooperating areas; the optional runtime and HTTP adapter wrap this core:
 
 1. **Protocol adapters** observe their own protocols and emit normalized `DiscoveryEvent` objects.
 2. **DiscoveryEngine** starts adapters, runs their asynchronous event streams concurrently, and merges the streams.
 3. **ObservationRegistry** applies lifecycle semantics, suppresses duplicate observations, and maintains the current inventory.
 4. **ObservationStorage** defines asynchronous key/value operations for remembered device records, with `InMemoryStorage` as the bundled reference implementation.
-5. **Consumer application** receives events and queries live or remembered records.
+5. **Consumer application** receives events and queries live or remembered records.\n6. **NetworkRuntime** consumes the engine exactly once in a background task, exposes snapshots and a grouped map, and fans out events to bounded future-only subscriptions.\n7. **Optional FastAPI router** exposes the same runtime via REST, SSE and health endpoints without starting a server.
 
 ```text
                     Consumer application
@@ -109,7 +109,7 @@ The same physical TV may be discovered through SSDP and mDNS and appear as two i
 
 Names, IP addresses, service names, and BLE addresses are not universally stable identifiers. BLE addresses may rotate for privacy, IP addresses may change, and a service instance is not necessarily a physical-device identity. Automatically merging records using weak evidence could incorrectly combine different devices.
 
-A future consumer may implement a correlation layer when it has stronger evidence or application-specific knowledge. That layer should not be hidden inside protocol discovery.
+Future SNF entity resolution may correlate observations when it has stronger evidence; no such automatic correlation is implemented in this PR. That layer should not be hidden inside protocol discovery.
 
 ## 5. Plugin contract and extensibility
 
@@ -198,7 +198,7 @@ The engine currently does not expose a structured collection of runtime plugin f
 
 | Decision | Rationale |
 | --- | --- |
-| Keep SNF focused on discovery and inventory | Prevents protocol discovery from becoming coupled to device control or automation. |
+| Keep the initial implementation focused on discovery, inventory, and optional HTTP access | Defer inspection and interaction without preventing future protocol-level capabilities. |
 | Use a protocol-neutral domain model | Consumers can work with one event and inventory API regardless of protocol. |
 | Use protocol-scoped identity | Avoids unsafe cross-protocol guesses about physical identity. |
 | Use asyncio and async iterators | Fits I/O-bound discovery and supports concurrent protocol streams. |
@@ -215,12 +215,12 @@ The following are explicit limitations, not guarantees the current framework alr
 - No cross-protocol device correlation.
 - No structured runtime health API for failed plugin streams.
 - No universal expiry policy across all protocols.
-- No control, pairing, or connection APIs.
+- No control, pairing, or connection APIs yet.
 - No guarantee that a discovered endpoint is reachable or safe to contact.
 - The registry's capacity eviction does not currently notify consumers.
 - Discovery results depend on network topology, multicast behavior, adapter support, operating-system permissions, and protocol-specific visibility.
 
-Future changes should preserve the separation between protocol adapters, orchestration, inventory, and consuming applications.
+Future changes should preserve the separation between protocol adapters, orchestration, inventory, and consuming applications.\n\n## Background runtime and HTTP adapter (PR #8)\n\n`NetworkRuntime` enters a `DiscoveryEngine` context and schedules exactly one task to iterate `engine.discover()`. The runtime owns that task and closes its subscriptions during shutdown. Consumers use `runtime.snapshot(protocol=...)`, `runtime.observation_map(protocol=...)`, and `runtime.subscribe(protocol=...)` rather than starting additional engine iterators. Subscriptions deliver future events only, with a configurable bounded queue; an overflowing subscription is disconnected without blocking discovery. The engine's internal merge queue is still unbounded.\n\nThe optional `snf.api.create_router(runtime)` is mounted by a caller-owned FastAPI application. With prefix `/network`, the routes are `/network/discoveries`, `/network/discoveries/map`, `/network/discoveries/events` (SSE), and `/network/health`. Health includes a fresh UTC timestamp, discovery consumer task status, protocol names, and live observation count. `discovery_running` means the consumer task is alive, not that each protocol backend is healthy; there is no HTTP start/stop control. The caller owns runtime lifespan and HTTP security.\n
 
 
 ## Injected inventory storage decision

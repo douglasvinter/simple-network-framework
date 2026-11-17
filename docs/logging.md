@@ -88,3 +88,4 @@ logging.getLogger("snf.adapters.mdns").setLevel(logging.WARNING)
 Standard Python logging filters, queue handlers, JSON formatters, and
 observability integrations can be configured by the consuming application.
 SNF does not require a logger constructor parameter.
+\n## Background runtime diagnostics\n\n`snf.runtime` logs an unexpected discovery-consumer failure and warns when a subscriber is disconnected because its bounded buffer fills. `snf.engine` continues to log plugin pump failures and lifecycle activity. A running consumer task does not prove that all plugin pumps are healthy; consult protocol-specific logs when diagnosing missing observations.\n\nConfigure log handlers and rotation in the consuming application. The optional HTTP router does not install handlers or configure global logging.\n
