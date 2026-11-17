@@ -4,8 +4,8 @@ import logging
 
 from snf.engine import DiscoveryEngine
 from snf.models import (
-    DiscoveryObservation,
     DiscoveryEvent,
+    DiscoveryObservation,
     DiscoveryState,
     Endpoint,
     Service,
