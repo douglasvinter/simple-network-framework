@@ -71,7 +71,7 @@ class UPnPDeviceResponse(BaseModel):
     model_name: str | None
     model_number: str | None
     services: tuple[UPnPServiceResponse, ...]
-    embedded_devices: tuple["UPnPDeviceResponse", ...]
+    embedded_devices: tuple[UPnPDeviceResponse, ...]
 
 
 class InspectionErrorDetail(BaseModel):
