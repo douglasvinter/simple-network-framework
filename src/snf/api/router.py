@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
-from snf.api.schemas import DiscoveryObservationResponse
+from snf.api.schemas import DiscoveryObservationResponse, NetworkEntityResponse
+from snf.entities import NetworkEntity
 from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
 
@@ -50,6 +51,14 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         validate(protocol)
         try:
             return runtime.observation_map(protocol=protocol)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @router.get("/entities", response_model=list[NetworkEntityResponse])
+    def entities(protocol: str | None = None) -> tuple[NetworkEntity, ...]:
+        validate(protocol)
+        try:
+            return runtime.entities(protocol=protocol)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 

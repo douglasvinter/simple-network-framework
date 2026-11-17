@@ -3,6 +3,7 @@
 import logging
 
 from snf.engine import DiscoveryEngine
+from snf.entities import EntityResolver, NetworkEntity
 from snf.models import (
     DiscoveryEvent,
     DiscoveryObservation,
@@ -20,6 +21,8 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "DiscoveryObservation",
+    "EntityResolver",
+    "NetworkEntity",
     "ObservationRegistry",
     "NetworkRuntime",
     "DiscoverySubscription",

@@ -36,6 +36,7 @@ async def test_http_routes_and_utc_health_timestamp():
     app.include_router(create_router(runtime), prefix="/network")
     paths = set(app.openapi()["paths"])
     assert paths == {
+        "/network/entities",
         "/network/discoveries",
         "/network/discoveries/map",
         "/network/discoveries/events",
@@ -57,6 +58,9 @@ async def test_http_routes_and_utc_health_timestamp():
             assert datetime.fromisoformat(health["timestamp"]).utcoffset().total_seconds() == 0
             observations = await client.get("/network/discoveries")
             assert observations.json()[0]["identifier"] == "one"
+            entities = await client.get("/network/entities")
+            assert entities.status_code == 200
+            assert entities.json()[0]["identity_source"] == "observation"
             grouped = await client.get("/network/discoveries/map")
             assert grouped.json()["fake"]["one"]["name"] == "TV"
             invalid = await client.get("/network/discoveries?protocol=unknown")

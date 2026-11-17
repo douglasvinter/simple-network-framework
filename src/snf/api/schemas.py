@@ -34,3 +34,13 @@ class DiscoveryObservationResponse(BaseModel):
     endpoints: tuple[EndpointResponse, ...] = ()
     services: tuple[ServiceResponse, ...] = ()
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NetworkEntityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    observations: tuple[DiscoveryObservationResponse, ...]
+    services: tuple[ServiceResponse, ...]
+    identity_source: str

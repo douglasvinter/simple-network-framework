@@ -9,6 +9,7 @@ from contextlib import suppress
 from typing import Self
 
 from snf.engine import DiscoveryEngine
+from snf.entities import EntityResolver, NetworkEntity
 from snf.models import DiscoveryEvent, DiscoveryObservation
 from snf.plugins import DiscoveryPlugin, create_plugins
 from snf.storage import InMemoryStorage, ObservationStorage
@@ -93,6 +94,9 @@ class NetworkRuntime:
         if self._engine is None:
             raise RuntimeError("Discovery has not started")
         return self._engine.snapshot(protocol=protocol)
+
+    def entities(self, *, protocol: str | None = None) -> tuple[NetworkEntity, ...]:
+        return EntityResolver().resolve(self.snapshot(protocol=protocol))
 
     def observation_map(
         self, *, protocol: str | None = None
