@@ -21,7 +21,7 @@ async def main() -> None:
 
     async with DiscoveryEngine(selected, storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
-            device = event.device
+            device = event.observation
             endpoints = ", ".join(
                 f"{endpoint.transport}://{endpoint.address}"
                 + (f":{endpoint.port}" if endpoint.port is not None else "")

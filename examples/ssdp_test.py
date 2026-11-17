@@ -18,7 +18,7 @@ async def main() -> None:
 
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as discovery:
         async for event in discovery.discover():
-            device = event.device
+            device = event.observation
             _LOGGER.info(
                 "[%s] [%s] %s (%s) endpoints=%s services=%s",
                 event.state.value,
