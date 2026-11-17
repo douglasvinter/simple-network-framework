@@ -4,8 +4,8 @@ import pytest
 
 from snf.engine import DiscoveryEngine
 from snf.models import (
-    DiscoveryObservation,
     DiscoveryEvent,
+    DiscoveryObservation,
     DiscoveryState,
     Endpoint,
     Service,
@@ -164,8 +164,12 @@ def test_registry_removal_allows_device_to_be_added_again():
 
 def test_registry_is_bounded():
     registry = ObservationRegistry(max_entries=1)
-    registry.process(DiscoveryEvent(DiscoveryState.ADDED, DiscoveryObservation("mdns", "one", "One")))
-    registry.process(DiscoveryEvent(DiscoveryState.ADDED, DiscoveryObservation("mdns", "two", "Two")))
+    registry.process(
+        DiscoveryEvent(DiscoveryState.ADDED, DiscoveryObservation("mdns", "one", "One"))
+    )
+    registry.process(
+        DiscoveryEvent(DiscoveryState.ADDED, DiscoveryObservation("mdns", "two", "Two"))
+    )
     assert len(registry) == 1
 
 
