@@ -40,8 +40,15 @@ async def test_http_inspection_end_to_end_and_error_isolation():
     xml = b"<root><device><friendlyName>Samsung TV</friendlyName></device></root>"
     device = parse_description(xml, "http://192.168.15.9:9110/ip_control")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock, return_value=device) as mocked:
-            response = await client.get("/network/discoveries/inspect", params={"identifier": observation.identifier})
+        with patch(
+            "snf.api.router.UPnPInspector.inspect_observation",
+            new_callable=AsyncMock,
+            return_value=device,
+        ) as mocked:
+            response = await client.get(
+                "/network/discoveries/inspect",
+                params={"identifier": observation.identifier},
+            )
         assert response.status_code == 200
         assert response.json()["friendly_name"] == "Samsung TV"
         assert response.json()["error"] == {}
@@ -59,7 +66,10 @@ async def test_http_inspection_end_to_end_and_error_isolation():
         }
         with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
                    side_effect=UPnPInspectionError("invalid description")):
-            failure = await client.get("/network/discoveries/inspect", params={"identifier": observation.identifier})
+            failure = await client.get(
+                "/network/discoveries/inspect",
+                params={"identifier": observation.identifier},
+            )
         assert failure.status_code == 502
         assert failure.json()["error"]["message"] == "invalid description"
         assert failure.json()["error"]["code"] == "INSPECTION_FAILED"
@@ -74,7 +84,9 @@ async def test_http_inspection_rejects_non_ssdp_protocol():
     app = FastAPI()
     app.include_router(create_router(runtime), prefix="/network")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/network/discoveries/inspect", params={"identifier": "unknown"})
+        response = await client.get(
+            "/network/discoveries/inspect", params={"identifier": "unknown"}
+        )
     assert response.status_code == 422
     assert response.json()["device"] is None
     assert response.json()["error"]["code"] == "UNSUPPORTED_PROTOCOL"
