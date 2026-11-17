@@ -1,6 +1,6 @@
 # ADR: Python-first network framework and optional HTTP adapter
 
-**Status:** Proposed — review before implementation  
+**Status:** Accepted — incremental implementation in progress  
 **Scope:** SNF architecture and consolidation of reusable networking capabilities  
 **Date:** 2026-11-16
 
@@ -150,7 +150,7 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 1. **Architecture review (this ADR):** agree on boundaries, ownership, event and lifecycle contracts.
 2. **Consolidation PR:** implement the reusable background runtime, subscriber fan-out, service projection, and HTTP schemas/routes in SNF. Preserve behavior; do not implement correlation or SQL in this PR.
-3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration; Bluetooth Classic SDP/profile inspection), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
+3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration; Bluetooth Classic SDP/profile inspection), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
 4. **Persistence PR:** explicit durable-inventory and reconciliation contracts; add SQLite only after contract tests.
 5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and BLE/Classic pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls. Bluetooth Classic discovery and audio-profile awareness require a backend separate from BLE-only scanning.
 6. **Real-device validation:** SSDP LOCATION/SCPD enrichment, BLE GATT inspection, Bluetooth Classic discovery/SDP/audio-profile detection, mDNS, OpenSLP, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
@@ -180,4 +180,4 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 ## Consequences and risks
 
-The framework becomes more capable and owns more lifecycle complexity, including explicit connection and pairing state in future phases. The implementation must avoid double consumption, unsafe correlation, unbounded queues, blocking slow subscribers, and accidental HTTP exposure. The existing discovery-centric design document and developer guide must be revised after this ADR is accepted; until then, they describe the current implementation rather than the target architecture.
+The framework becomes more capable and owns more lifecycle complexity, including explicit connection and pairing state in future phases. The implementation must avoid double consumption, unsafe correlation, unbounded queues, blocking slow subscribers, and accidental HTTP exposure. The current implementation is documented separately in [Architecture](architecture.md) and the [Developer Guide](developer-guide.md). This ADR remains the record of the target architecture; planned capabilities must not be mistaken for shipped features.

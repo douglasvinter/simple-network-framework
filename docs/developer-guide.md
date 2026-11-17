@@ -1,12 +1,12 @@
 # Developer Guide
 
-This guide explains how to use Simple Network Framework (SNF) from an application and how to implement and distribute a third-party discovery plugin.
+This guide explains how to use Simple Network Framework (SNF) from an application, run its optional HTTP API, and implement and distribute a third-party discovery plugin. See [Architecture](architecture.md) for the current implementation and the [ADR](adr-python-first-network-framework.md) for planned capabilities.
 
 ## 1. Install SNF
 
 SNF requires Python 3.11 or newer. Protocol backends are optional dependencies.
 
-Install all Python protocol backends:
+Install all Python protocol backends and the optional HTTP API:
 
 ```bash
 python -m pip install 'simple-network-framework[all]'
@@ -393,3 +393,9 @@ Visit `http://127.0.0.1:8000/docs` for Swagger UI or
 `http://127.0.0.1:8000/network/health` for a health check. The example uses
 FastAPI lifespan to start and stop the shared `NetworkRuntime`; the server is
 never started implicitly by installing or importing SNF.
+
+## 13. Observation map versus resolved entities
+
+`GET /network/discoveries/map` returns the same **raw normalized observations** as the discoveries endpoint, indexed first by protocol and then by protocol-scoped identifier. It is a JSON grouping, **not** a topology diagram or deduplicated physical-device inventory. For example, one TV can appear under mDNS AirPlay and multiple SSDP advertisements; multiple SSDP USNs can represent different advertised services from the same host. Do not merge records solely by IP address, display name, or BLE address. BLE privacy addresses can change, and repeated friendly names do not establish identity.
+
+The SSDP adapter's current endpoint port may reflect the UDP response source port rather than the port in the advertised `LOCATION` URL. Treat `metadata.location` as the advertised description locator and **do not assume** an observation endpoint is an actionable UPnP service endpoint. Resolving UPnP descriptions, validating locators, and constructing service-specific endpoints belong to the planned inspection phase, not this HTTP backport. Never fetch arbitrary discovered URLs without appropriate local-network targeting, redirect, timeout and response-size protections.

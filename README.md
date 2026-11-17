@@ -9,14 +9,19 @@ an in-memory inventory, and an entry-point plugin system.
 
 ## Scope
 
-SNF discovers devices and the services/endpoints they advertise. It does not pair
-Bluetooth devices, connect to devices, invoke device APIs, control TVs or appliances,
-or implement automation workflows. Those responsibilities belong to consuming
-applications such as a home-automation project.
+SNF currently provides concurrent protocol discovery, normalized observations, a live
+inventory, an embeddable background runtime, and an optional REST/SSE API.
+Discovery records are protocol-scoped evidence, not a correlated physical-device
+inventory. The `/network/discoveries/map` endpoint groups raw observations by
+protocol and identifier; it does **not** merge devices by IP, name, or BLE address.
 
-Discovery identity is protocol-scoped. If SSDP and mDNS report the same physical TV,
-SNF currently keeps separate records. It deliberately does not guess that two
-observations represent the same physical device.
+Protocol inspection, evidence-based entity resolution, and generic protocol
+interactions are planned separately. Vendor-specific commands and automation
+workflows remain responsibilities of consuming applications.
+
+See [Architecture](docs/architecture.md) for the implemented design and
+[Architecture Decision Record](docs/adr-python-first-network-framework.md) for
+the target direction and trade-offs.
 
 ## Requirements
 
@@ -31,7 +36,7 @@ observations represent the same physical device.
 python -m pip install 'simple-network-framework[all]'
 ```
 
-This installs the framework and its SSDP, mDNS, and BLE backends. SLP has an additional
+This installs the framework, its SSDP, mDNS, and BLE backends, and the optional HTTP API dependencies (FastAPI, SSE and Uvicorn). SLP has an additional
 native dependency: the OpenSLP `slptool` executable must be installed separately
 and available on `PATH`. OpenSLP is not a Python package, and availability and
 installation steps vary by operating system.
