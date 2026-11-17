@@ -84,10 +84,13 @@ class MDNSInspector:
             ) from exc
 
         try:
-            async with AsyncZeroconf() as zeroconf:
+            zeroconf = AsyncZeroconf()
+            try:
                 info = await zeroconf.async_get_service_info(
                     service_type, name, timeout=self.timeout_ms
                 )
+            finally:
+                await zeroconf.async_close()
         except (OSError, TimeoutError) as exc:
             raise MDNSInspectionError(
                 "mDNS service resolution failed", code="RESOLUTION_FAILED"
