@@ -4,13 +4,13 @@ import pytest
 
 from snf.engine import DiscoveryEngine
 from snf.models import (
-    Device,
+    DiscoveryObservation,
     DiscoveryEvent,
     DiscoveryState,
     Endpoint,
     Service,
 )
-from snf.registry import DeviceRegistry
+from snf.registry import ObservationRegistry
 from snf.storage import InMemoryStorage
 
 
@@ -23,7 +23,7 @@ class FakePlugin:
         self.events = events if events is not None else [
             DiscoveryEvent(
                 DiscoveryState.ADDED,
-                Device(
+                DiscoveryObservation(
                     protocol=self.name,
                     identifier="device-1",
                     name="test",
@@ -50,8 +50,8 @@ async def test_engine_lifecycle_and_discovery():
         assert plugin.started
         results = [event async for event in engine.discover()]
         assert len(results) == 1
-        assert results[0].device.name == "test"
-        assert engine.devices == (results[0].device,)
+        assert results[0].observation.name == "test"
+        assert engine.observations == (results[0].observation,)
     assert plugin.stopped
 
 
@@ -114,7 +114,7 @@ async def test_engine_requires_context_manager():
 
 @pytest.mark.asyncio
 async def test_engine_suppresses_duplicate_announcements_and_updates_inventory():
-    device = Device(
+    device = DiscoveryObservation(
         protocol="ssdp",
         identifier="uuid:device-1",
         name="Living room TV",
@@ -126,17 +126,17 @@ async def test_engine_suppresses_duplicate_announcements_and_updates_inventory()
     ])
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         events = [event async for event in engine.discover()]
-        assert engine.get_device("ssdp", "uuid:device-1") == device
+        assert engine.get_observation("ssdp", "uuid:device-1") == device
     assert len(events) == 1
     assert events[0].state is DiscoveryState.ADDED
 
 
 @pytest.mark.asyncio
 async def test_engine_emits_update_when_device_changes():
-    initial = Device(
+    initial = DiscoveryObservation(
         "ssdp", "uuid:device-1", "TV", (Endpoint("ip", "192.0.2.10", 1400),)
     )
-    changed = Device(
+    changed = DiscoveryObservation(
         "ssdp", "uuid:device-1", "TV", (Endpoint("ip", "192.0.2.11", 1400),)
     )
     plugin = FakePlugin([
@@ -148,12 +148,12 @@ async def test_engine_emits_update_when_device_changes():
     assert [event.state for event in events] == [
         DiscoveryState.ADDED, DiscoveryState.UPDATED
     ]
-    assert events[1].device.endpoints[0].address == "192.0.2.11"
+    assert events[1].observation.endpoints[0].address == "192.0.2.11"
 
 
 def test_registry_removal_allows_device_to_be_added_again():
-    registry = DeviceRegistry()
-    device = Device("mdns", "printer", "Printer")
+    registry = ObservationRegistry()
+    device = DiscoveryObservation("mdns", "printer", "Printer")
     added = DiscoveryEvent(DiscoveryState.ADDED, device)
     removed = DiscoveryEvent(DiscoveryState.REMOVED, device)
     assert registry.process(added) == added
@@ -163,16 +163,16 @@ def test_registry_removal_allows_device_to_be_added_again():
 
 
 def test_registry_is_bounded():
-    registry = DeviceRegistry(max_entries=1)
-    registry.process(DiscoveryEvent(DiscoveryState.ADDED, Device("mdns", "one", "One")))
-    registry.process(DiscoveryEvent(DiscoveryState.ADDED, Device("mdns", "two", "Two")))
+    registry = ObservationRegistry(max_entries=1)
+    registry.process(DiscoveryEvent(DiscoveryState.ADDED, DiscoveryObservation("mdns", "one", "One")))
+    registry.process(DiscoveryEvent(DiscoveryState.ADDED, DiscoveryObservation("mdns", "two", "Two")))
     assert len(registry) == 1
 
 
 def test_service_is_nested_in_device():
     endpoint = Endpoint("ip", "192.0.2.20", 80)
     service = Service("http", "_http._tcp.local.", (endpoint,))
-    device = Device("mdns", "web-1", "Web server", (endpoint,), (service,))
+    device = DiscoveryObservation("mdns", "web-1", "Web server", (endpoint,), (service,))
     assert device.services[0].endpoints[0].port == 80
 
 
@@ -192,7 +192,7 @@ async def test_engine_skips_failed_start_and_keeps_healthy_plugin(caplog):
             events = [event async for event in engine.discover()]
 
     assert len(events) == 1
-    assert events[0].device.name == "test"
+    assert events[0].observation.name == "test"
     assert healthy.stopped and failing.stopped
     assert "Failed to start discovery plugin failing" in caplog.text
 
@@ -210,9 +210,9 @@ async def test_engine_with_all_failed_plugins_returns_empty_stream():
 
 
 def test_registry_snapshot_filters_protocol_without_changing_inventory():
-    registry = DeviceRegistry()
-    mdns = Device("mdns", "one", "Printer")
-    ssdp = Device("ssdp", "two", "TV")
+    registry = ObservationRegistry()
+    mdns = DiscoveryObservation("mdns", "one", "Printer")
+    ssdp = DiscoveryObservation("ssdp", "two", "TV")
     registry.process(DiscoveryEvent(DiscoveryState.ADDED, mdns))
     registry.process(DiscoveryEvent(DiscoveryState.ADDED, ssdp))
 
@@ -225,8 +225,8 @@ def test_registry_snapshot_filters_protocol_without_changing_inventory():
 
 @pytest.mark.asyncio
 async def test_engine_snapshot_filters_protocol_and_preserves_devices_property():
-    mdns = Device("mdns", "one", "Printer")
-    ssdp = Device("ssdp", "two", "TV")
+    mdns = DiscoveryObservation("mdns", "one", "Printer")
+    ssdp = DiscoveryObservation("ssdp", "two", "TV")
     plugin = FakePlugin([
         DiscoveryEvent(DiscoveryState.ADDED, mdns),
         DiscoveryEvent(DiscoveryState.ADDED, ssdp),
@@ -234,7 +234,7 @@ async def test_engine_snapshot_filters_protocol_and_preserves_devices_property()
 
     async with DiscoveryEngine([plugin], storage=InMemoryStorage()) as engine:
         _ = [event async for event in engine.discover()]
-        assert engine.snapshot() == engine.devices == (mdns, ssdp)
+        assert engine.snapshot() == engine.observations == (mdns, ssdp)
         assert engine.snapshot(protocol="mdns") == (mdns,)
         assert engine.snapshot(protocol="ssdp") == (ssdp,)
         assert engine.snapshot(protocol="slp") == ()

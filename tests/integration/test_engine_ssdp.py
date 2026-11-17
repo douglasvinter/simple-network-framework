@@ -49,10 +49,10 @@ async def test_real_ssdp_adapter_and_engine_with_mocked_network_boundary(monkeyp
         assert len(events) == 1
         event = events[0]
         assert event.state is DiscoveryState.ADDED
-        assert event.device.protocol == "ssdp"
-        assert event.device.identifier == "uuid:living-room-tv::upnp:rootdevice"
-        assert event.device.name == "Test TV/1.0 UPnP/1.1"
-        assert event.device.endpoints[0].address == "192.0.2.40"
-        assert event.device.endpoints[0].port == 1400
-        assert event.device.services[0].service_type == "upnp:rootdevice"
-        assert engine.get_device("ssdp", event.device.identifier) == event.device
+        assert event.observation.protocol == "ssdp"
+        assert event.observation.identifier == "uuid:living-room-tv::upnp:rootdevice"
+        assert event.observation.name == "Test TV/1.0 UPnP/1.1"
+        assert event.observation.endpoints[0].address == "192.0.2.40"
+        assert event.observation.endpoints[0].port == 1400
+        assert event.observation.services[0].service_type == "upnp:rootdevice"
+        assert engine.get_observation("ssdp", event.observation.identifier) == event.observation

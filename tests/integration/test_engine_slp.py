@@ -49,11 +49,11 @@ async def test_real_slp_adapter_and_engine_with_mocked_subprocess(monkeypatch):
         await stream.aclose()
 
         assert event.state is DiscoveryState.ADDED
-        assert event.device.protocol == "slp"
-        assert event.device.services[0].service_type == "printer"
-        assert event.device.endpoints[0].address == "printer.local"
-        assert event.device.endpoints[0].port == 9100
-        assert event.device.metadata["lifetime"] == "600"
-        assert engine.get_device("slp", event.device.identifier) == event.device
+        assert event.observation.protocol == "slp"
+        assert event.observation.services[0].service_type == "printer"
+        assert event.observation.endpoints[0].address == "printer.local"
+        assert event.observation.endpoints[0].port == 9100
+        assert event.observation.metadata["lifetime"] == "600"
+        assert engine.get_observation("slp", event.observation.identifier) == event.observation
 
     assert len(calls) == 2
