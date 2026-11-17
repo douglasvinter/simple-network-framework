@@ -49,7 +49,8 @@ async def test_http_routes_and_utc_health_timestamp():
                 import asyncio
                 await asyncio.sleep(0.01)
             health = (await client.get("/network/health")).json()
-            assert health["status"] == "degraded" or health["status"] == "ok"
+            assert health["discovery_running"] is False
+            assert health["status"] == "degraded"
             assert datetime.fromisoformat(health["timestamp"]).utcoffset().total_seconds() == 0
             observations = await client.get("/network/discoveries")
             assert observations.json()[0]["identifier"] == "one"

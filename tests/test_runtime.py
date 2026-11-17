@@ -36,9 +36,11 @@ async def test_one_consumer_multiple_subscribers_and_snapshot():
     async with NetworkRuntime([plugin]) as runtime:
         first = runtime.subscribe()
         second = runtime.subscribe(protocol="fake")
+        first_events = aiter(first)
+        second_events = aiter(second)
         await plugin.queue.put(event("one"))
-        assert (await asyncio.wait_for(anext(aiter(first)), 1)).observation.identifier == "one"
-        assert (await asyncio.wait_for(anext(aiter(second)), 1)).observation.identifier == "one"
+        assert (await asyncio.wait_for(anext(first_events), 1)).observation.identifier == "one"
+        assert (await asyncio.wait_for(anext(second_events), 1)).observation.identifier == "one"
         assert runtime.snapshot() == (event("one").observation,)
         assert runtime.observation_map() == {"fake": {"one": event("one").observation}}
         first.close()
@@ -82,4 +84,5 @@ async def test_no_plugins_and_reentry():
         with pytest.raises(RuntimeError):
             await runtime.__aenter__()
         assert not runtime.running or runtime.protocols == ()
-    assert runtime.snapshot if hasattr(runtime, "snapshot") else True
+    with pytest.raises(RuntimeError):
+        runtime.snapshot()
