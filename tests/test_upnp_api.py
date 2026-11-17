@@ -49,6 +49,14 @@ async def test_http_inspection_end_to_end_and_error_isolation():
         mocked.assert_awaited_once_with(observation)
         missing = await client.get("/network/discoveries/inspect", params={"identifier": "missing"})
         assert missing.status_code == 404
+        assert missing.json() == {
+            "device": None,
+            "error": {
+                "code": "OBSERVATION_NOT_FOUND",
+                "message": "SSDP observation not found",
+                "raw_response": None,
+            },
+        }
         with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
                    side_effect=UPnPInspectionError("invalid description")):
             failure = await client.get("/network/discoveries/inspect", params={"identifier": observation.identifier})
@@ -68,6 +76,8 @@ async def test_http_inspection_rejects_non_ssdp_protocol():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/network/discoveries/inspect", params={"identifier": "unknown"})
     assert response.status_code == 422
+    assert response.json()["device"] is None
+    assert response.json()["error"]["code"] == "UNSUPPORTED_PROTOCOL"
 
 
 
@@ -158,3 +168,36 @@ async def test_malformed_xml_returns_422_with_identity_fallback():
     assert response.status_code == 422
     assert response.json()["device"]["udn"] == "uuid:broken"
     assert response.json()["error"]["code"] == "MALFORMED_DESCRIPTION"
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("params", [{}, {"identifier": ""}, {"identifier": "  "}])
+async def test_inspection_missing_identifier_is_normalized(params):
+    app = FastAPI()
+    app.include_router(create_router(SnapshotRuntime([])), prefix="/network")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/network/discoveries/inspect", params=params)
+    assert response.status_code == 422
+    assert response.json()["device"] is None
+    assert response.json()["error"]["code"] == "INVALID_IDENTIFIER"
+    assert "detail" not in response.json()
+
+
+@pytest.mark.asyncio
+async def test_inspection_unstarted_runtime_is_normalized():
+    class UnstartedRuntime(NetworkRuntime):
+        def __init__(self):
+            super().__init__(plugins=[])
+            self._protocols = ("ssdp",)
+
+    app = FastAPI()
+    app.include_router(create_router(UnstartedRuntime()), prefix="/network")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/network/discoveries/inspect", params={"identifier": "uuid:device"}
+        )
+    assert response.status_code == 503
+    assert response.json()["device"] is None
+    assert response.json()["error"]["code"] == "RUNTIME_UNAVAILABLE"
+    assert "detail" not in response.json()

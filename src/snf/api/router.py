@@ -113,20 +113,45 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         "/discoveries/inspect",
         response_model=InspectionSuccessResponse,
         responses={
+            404: {"model": InspectionErrorResponse},
             422: {"model": InspectionErrorResponse},
             502: {"model": InspectionErrorResponse},
+            503: {"model": InspectionErrorResponse},
         },
     )
-    async def inspect_discovery(identifier: str) -> object:
+    async def inspect_discovery(identifier: str | None = None) -> object:
         """Explicit, read-only inspection of a discovered SSDP advertisement."""
-        validate("ssdp")
+
+        def failure(
+            status: int, code: str, message: str,
+            observation: DiscoveryObservation | None = None,
+            raw_response: str | None = None,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=status,
+                content=InspectionErrorResponse(
+                    device=_advertised_device(observation) if observation else None,
+                    error={
+                        "code": code,
+                        "message": message,
+                        "raw_response": raw_response,
+                    },
+                ).model_dump(),
+            )
+
+        if identifier is None or not identifier.strip():
+            return failure(422, "INVALID_IDENTIFIER", "An SSDP identifier is required")
+        try:
+            runtime.validate_protocol("ssdp")
+        except ValueError as exc:
+            return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
             observations = runtime.snapshot(protocol="ssdp")
         except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+            return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
         observation = next((item for item in observations if item.identifier == identifier), None)
         if observation is None:
-            raise HTTPException(status_code=404, detail="SSDP observation not found")
+            return failure(404, "OBSERVATION_NOT_FOUND", "SSDP observation not found")
         try:
             device = await UPnPInspector().inspect_observation(observation)
             return InspectionSuccessResponse.model_validate({
@@ -138,17 +163,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
                 "UNSUPPORTED_DESCRIPTION_FORMAT",
                 "MALFORMED_DESCRIPTION",
             } else 502
-            return JSONResponse(
-                status_code=status,
-                content=InspectionErrorResponse(
-                    device=_advertised_device(observation),
-                    error={
-                        "code": exc.code,
-                        "message": str(exc),
-                        "raw_response": exc.raw_response,
-                    },
-                ).model_dump(),
-            )
+            return failure(status, exc.code, str(exc), observation, exc.raw_response)
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
     async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:

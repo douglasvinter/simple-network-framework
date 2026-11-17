@@ -85,5 +85,5 @@ class InspectionSuccessResponse(UPnPDeviceResponse):
 
 
 class InspectionErrorResponse(BaseModel):
-    device: UPnPDeviceResponse
+    device: UPnPDeviceResponse | None
     error: InspectionErrorDetail

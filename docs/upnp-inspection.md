@@ -53,3 +53,12 @@ The successful HTTP 200 payload retains UPnP device fields at the top level
 and always includes `"error": {}`. Failed inspections retain the `device`
 fallback wrapper and a nonempty `error` object. An endpoint that returns
 plain-text `status=ok` rather than a UPnP XML description returns HTTP 422.
+
+All application-level outcomes from the inspection endpoint use the same
+error envelope. A missing/blank identifier returns HTTP 422 with
+`INVALID_IDENTIFIER`; unavailable SSDP support returns HTTP 422 with
+`UNSUPPORTED_PROTOCOL`; an unknown observation returns HTTP 404 with
+`OBSERVATION_NOT_FOUND`; and an unstarted runtime returns HTTP 503 with
+`RUNTIME_UNAVAILABLE`. When no observation is available, `device` is
+`null` rather than fabricated. These endpoint-specific failures do not
+use FastAPI's `detail` key. Other SNF routes are unaffected.
