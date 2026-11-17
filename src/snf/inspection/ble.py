@@ -47,7 +47,7 @@ class BLEInspector:
                 "Observation has no BLE identifier", code="INVALID_OBSERVATION"
             )
         try:
-            from bleak import BleakClient
+            from bleak import BleakClient, BleakError
         except ImportError as exc:
             raise BLEInspectionError(
                 "Install BLE support with the ble extra", code="DEPENDENCY_UNAVAILABLE"
@@ -72,7 +72,7 @@ class BLEInspector:
                     )
                     for service in client.services
                 )
-        except (OSError, TimeoutError) as exc:
+        except (BleakError, OSError, TimeoutError) as exc:
             raise BLEInspectionError(
                 "BLE GATT service enumeration failed", code="CONNECTION_FAILED"
             ) from exc
