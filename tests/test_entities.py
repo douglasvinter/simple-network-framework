@@ -63,3 +63,26 @@ def test_duplicate_service_preserved_once():
         DiscoveryObservation("ssdp", "b", "TV", services=(service,), metadata={"usn": UDN}),
     )
     assert EntityResolver().resolve(records)[0].services == (service,)
+
+
+def test_protocol_separator_does_not_collide():
+    records = (
+        DiscoveryObservation("a:b", "c", "First"),
+        DiscoveryObservation("a", "b:c", "Second"),
+    )
+    entities = EntityResolver().resolve(records)
+    assert len(entities) == 2
+    assert len({entity.id for entity in entities}) == 2
+
+
+def test_same_service_with_changed_metadata_is_deduplicated():
+    records = (
+        DiscoveryObservation("ssdp", "a", "TV", services=(Service("root", metadata={"age": 10}),), metadata={"usn": UDN}),
+        DiscoveryObservation("ssdp", "b", "TV", services=(Service("root", metadata={"age": 20}),), metadata={"usn": UDN}),
+    )
+    assert len(EntityResolver().resolve(records)[0].services) == 1
+
+
+def test_uuid_case_normalization():
+    record = DiscoveryObservation("ssdp", "a", "TV", metadata={"usn": "uuid:" + UDN[5:].upper()})
+    assert EntityResolver().resolve((record,))[0].id == f"ssdp:{UDN}"

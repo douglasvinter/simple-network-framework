@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from uuid import UUID
+from urllib.parse import quote
 
 from snf.models import DiscoveryObservation, Service
 
@@ -36,30 +37,40 @@ class EntityResolver:
             return None
 
     def resolve(self, observations: Iterable[DiscoveryObservation]) -> tuple[NetworkEntity, ...]:
-        groups: dict[str, list[DiscoveryObservation]] = {}
+        groups: dict[tuple[str, str, str], list[DiscoveryObservation]] = {}
         for observation in observations:
             udn = self._udn(observation)
             if udn is not None:
-                key = f"ssdp:{udn}"
+                key = ("udn", "ssdp", udn)
             else:
-                key = f"{observation.protocol}:{observation.identifier}"
+                key = ("observation", observation.protocol, observation.identifier)
             groups.setdefault(key, []).append(observation)
 
         entities: list[NetworkEntity] = []
         for key, members in sorted(groups.items()):
+            kind, protocol, identifier = key
+            # Escape the protocol separator, but keep familiar device identifiers readable.
+            public_id = f"{quote(protocol, safe='')}:{identifier}"
             ordered = tuple(sorted(members, key=lambda item: (item.protocol, item.identifier)))
             services: list[Service] = []
+            seen_services: set[tuple[object, ...]] = set()
             for observation in ordered:
                 for service in observation.services:
-                    if service not in services:
+                    service_key = (
+                        service.name,
+                        service.service_type,
+                        tuple((e.transport, e.address, e.port) for e in service.endpoints),
+                    )
+                    if service_key not in seen_services:
+                        seen_services.add(service_key)
                         services.append(service)
             entities.append(
                 NetworkEntity(
-                    id=key,
+                    id=public_id,
                     name=ordered[0].name,
                     observations=ordered,
                     services=tuple(services),
-                    identity_source="ssdp_udn" if key.startswith("ssdp:uuid:") else "observation",
+                    identity_source="ssdp_udn" if kind == "udn" else "observation",
                 )
             )
         return tuple(entities)
