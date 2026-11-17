@@ -1,8 +1,7 @@
 """UPnP inspection unit and local HTTP integration tests."""
 
 import asyncio
-import socket
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -125,7 +124,9 @@ async def test_single_observation_inspection():
         metadata={"location": location},
     )
     inspector = UPnPInspector()
-    with patch.object(inspector, "inspect", return_value=parse_description(XML, location)) as mocked:
+    with patch.object(
+        inspector, "inspect", return_value=parse_description(XML, location)
+    ) as mocked:
         result = await inspector.inspect_observation(observation)
     assert result.friendly_name == "Living Room TV"
     mocked.assert_awaited_once_with(location, expected_addresses=frozenset({"192.168.15.9"}))
