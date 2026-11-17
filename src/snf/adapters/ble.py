@@ -10,6 +10,7 @@ from importlib.util import find_spec
 from typing import Any, Literal, Protocol
 
 from snf.bluetooth.assigned_numbers import company_name, uuid_details
+from snf.bluetooth.fingerprints import identify_ble_device
 from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, Endpoint, Service
 
 
@@ -71,6 +72,10 @@ class BLEPlugin:
             str(uuid): bytes(value).hex()
             for uuid, value in (getattr(advertisement_data, "service_data", {}) or {}).items()
         }
+        identification = identify_ble_device(
+            dict(getattr(advertisement_data, "manufacturer_data", {}) or {}),
+            local_name=advertised_name,
+        )
         endpoint = Endpoint("ble", address)
         services = tuple(
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
@@ -86,6 +91,7 @@ class BLEPlugin:
                 "rssi": rssi,
                 "tx_power": tx_power,
                 "local_name": advertised_name,
+                "device_identification": identification,
                 "service_uuids": service_uuids,
                 "manufacturer_data": manufacturer_data,
                 "company_names": {
