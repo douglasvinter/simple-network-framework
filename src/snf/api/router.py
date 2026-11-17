@@ -6,11 +6,20 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
-from snf.api.schemas import DiscoveryObservationResponse, NetworkEntityResponse
+from snf.api.schemas import (
+    DiscoveryObservationResponse,
+    InspectionErrorResponse,
+    InspectionSuccessResponse,
+    NetworkEntityResponse,
+    UPnPDeviceResponse,
+)
 from snf.entities import NetworkEntity
+from snf.inspection.ssdp_metadata import SSDPMetadataParser
+from snf.inspection.upnp import UPnPInspectionError, UPnPInspector
 from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
 
@@ -21,6 +30,21 @@ class HealthResponse(BaseModel):
     discovery_running: bool
     observations: int
     protocols: tuple[str, ...]
+
+
+def _advertised_device(observation: DiscoveryObservation) -> UPnPDeviceResponse:
+    """Translate SSDP identity evidence into the API's fallback device."""
+    metadata = SSDPMetadataParser().parse(observation)
+    return UPnPDeviceResponse(
+        udn=metadata.udn,
+        device_type=metadata.device_type,
+        friendly_name=metadata.friendly_name,
+        manufacturer=None,
+        model_name=None,
+        model_number=None,
+        services=(),
+        embedded_devices=(),
+    )
 
 
 def create_router(runtime: NetworkRuntime) -> APIRouter:
@@ -61,6 +85,62 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             return runtime.entities(protocol=protocol)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @router.get(
+        "/discoveries/inspect",
+        response_model=InspectionSuccessResponse,
+        responses={
+            404: {"model": InspectionErrorResponse},
+            422: {"model": InspectionErrorResponse},
+            502: {"model": InspectionErrorResponse},
+            503: {"model": InspectionErrorResponse},
+        },
+    )
+    async def inspect_discovery(identifier: str | None = None) -> object:
+        """Explicit, read-only inspection of a discovered SSDP advertisement."""
+
+        def failure(
+            status: int, code: str, message: str,
+            observation: DiscoveryObservation | None = None,
+            raw_response: str | None = None,
+        ) -> JSONResponse:
+            return JSONResponse(
+                status_code=status,
+                content=InspectionErrorResponse(
+                    device=_advertised_device(observation) if observation else None,
+                    error={
+                        "code": code,
+                        "message": message,
+                        "raw_response": raw_response,
+                    },
+                ).model_dump(),
+            )
+
+        if identifier is None or not identifier.strip():
+            return failure(422, "INVALID_IDENTIFIER", "An SSDP identifier is required")
+        try:
+            runtime.validate_protocol("ssdp")
+        except ValueError as exc:
+            return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
+        try:
+            observations = runtime.snapshot(protocol="ssdp")
+        except RuntimeError as exc:
+            return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
+        observation = next((item for item in observations if item.identifier == identifier), None)
+        if observation is None:
+            return failure(404, "OBSERVATION_NOT_FOUND", "SSDP observation not found")
+        try:
+            device = await UPnPInspector().inspect_observation(observation)
+            return InspectionSuccessResponse.model_validate({
+                **UPnPDeviceResponse.model_validate(device).model_dump(),
+                "error": {},
+            })
+        except UPnPInspectionError as exc:
+            status = 422 if exc.code in {
+                "UNSUPPORTED_DESCRIPTION_FORMAT",
+                "MALFORMED_DESCRIPTION",
+            } else 502
+            return failure(status, exc.code, str(exc), observation, exc.raw_response)
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
     async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:

@@ -49,3 +49,41 @@ class NetworkEntityResponse(BaseModel):
     observations: tuple[ObservationReferenceResponse, ...]
     services: tuple[ServiceResponse, ...]
     identity_source: str
+
+
+class UPnPServiceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    service_type: str
+    service_id: str
+    scpd_url: str | None
+    control_url: str | None
+    event_sub_url: str | None
+
+
+class UPnPDeviceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    udn: str | None
+    device_type: str | None
+    friendly_name: str | None
+    manufacturer: str | None
+    model_name: str | None
+    model_number: str | None
+    services: tuple[UPnPServiceResponse, ...]
+    embedded_devices: tuple[UPnPDeviceResponse, ...]
+
+
+class InspectionErrorDetail(BaseModel):
+    code: str
+    message: str
+    raw_response: str | None = None
+
+
+class InspectionSuccessResponse(UPnPDeviceResponse):
+    error: dict[str, str] = Field(default_factory=dict)
+
+
+class InspectionErrorResponse(BaseModel):
+    device: UPnPDeviceResponse | None
+    error: InspectionErrorDetail
