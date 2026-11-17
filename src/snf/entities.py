@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from uuid import UUID
 from urllib.parse import quote
+from uuid import UUID
 
 from snf.models import DiscoveryObservation, Service
 
