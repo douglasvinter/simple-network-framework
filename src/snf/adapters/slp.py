@@ -7,7 +7,7 @@ import shutil
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 
-from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState, Endpoint, Service
+from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, Endpoint, Service
 
 
 class SLPPlugin:
