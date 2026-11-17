@@ -14,7 +14,7 @@ The separate SHA application subsequently introduced a background `DiscoveryMana
 
 **SNF is an embeddable, Python-first network framework.** Its core functionality is available through Python APIs without a server. An **optional** FastAPI adapter exposes the same running framework instance over HTTP; it neither owns networking behavior nor creates an independent discovery state.
 
-SNF owns protocol discovery, normalized observations, network-entity resolution, service aggregation, runtime lifecycle, event fan-out, and storage contracts. Device-specific control, application workflows, and home-automation rules are outside SNF.
+SNF owns protocol discovery, normalized observations, network-entity resolution, service aggregation, runtime lifecycle, event fan-out, storage contracts, **generic service consumption and connection/session management**, and **protocol-level pairing/unpairing where supported**. SNF provides protocol capabilities, not vendor-specific device behavior. Vendor-specific integrations, device commands, application workflows, and home-automation rules belong to SHA or another consuming application.
 
 ### Boundaries
 
@@ -24,9 +24,11 @@ SNF owns protocol discovery, normalized observations, network-entity resolution,
 | Live observation registry and lifecycle | Owns | Reads/subscribes |
 | Network identity resolution and evidence | Owns | May add application knowledge |
 | Service/endpoint aggregation | Owns | Uses |
+| Generic service consumption and protocol operations | Owns protocol-level adapters/contracts | Chooses services and interprets results |
+| Pairing/unpairing, connection and session lifecycle | Owns when supported by protocol/backend | Requests operations and applies user policy |
+| Vendor-specific device integrations and commands | Does not own | Owns |
 | Storage contracts and optional drivers | Owns | Selects/configures |
 | REST/SSE/OpenAPI | Optional SNF adapter | Embeds router if desired |
-| Device-specific integrations and commands | Does not own | Owns |
 | Automation rules, scenes, schedules | Does not own | Owns |
 
 ## Public contracts (proposed, not yet implemented)
@@ -68,6 +70,22 @@ Keep raw `DiscoveryObservation` records as protocol evidence. Add a separate net
 - No cryptographic claim should be implied by a field named `verified` unless actual verification exists.
 - Identity resolution must be testable without FastAPI and without a database.
 
+### Network interactions and capability contracts (subsequent phases)
+
+Discovery is not the framework's final boundary. SNF will expose **generic network interaction APIs** through Python and, where appropriate, its optional HTTP adapter:
+
+- **Service consumption:** resolve an advertised service, open a protocol-supported interaction, send requests or invoke standardized operations, and return protocol-level responses/errors. A discovered service is not automatically callable; adapters must advertise supported operations.
+- **Connections and sessions:** explicit connect/disconnect and session lifecycle management where the underlying protocol or library supports it, including timeouts, cancellation, cleanup, and failure reporting.
+- **Pairing and unpairing:** explicit operations for protocols/backends that provide them (for example, Bluetooth pairing via a suitable OS backend). Pairing is not a universal concept for SSDP, mDNS, or OpenSLP, and must not be fabricated as one.
+- **Capability discovery:** describe which operations an adapter actually supports, including platform-dependent or unavailable operations. Unsupported operations must fail explicitly rather than silently succeeding.
+- **Python-first and HTTP parity:** supported generic operations are callable from Python without FastAPI; HTTP routes may expose selected operations using the same services, not separate implementations.
+
+**Interaction operations must be explicit and opt-in.** Discovery or a read-only inventory request must never implicitly pair, unpair, authenticate, open sessions, or invoke a device command. Connection and pairing APIs require clear authorization and security boundaries; exposing them over HTTP requires authentication/authorization, input validation, and conservative network binding. Do not expose an unrestricted arbitrary-target request proxy or command executor.
+
+**Vendor boundary:** SNF can invoke a standardized UPnP action, communicate with a supported generic protocol service, or pair a Bluetooth device. SHA interprets the device's vendor/model-specific semantics (for example, launching an app on a particular TV, selecting an air-conditioner mode, or handling proprietary authentication). Generic protocol support does not imply SNF implements every vendor command.
+
+These are **planned contracts**, not implemented functionality. Design each interaction API against real adapter/backend capabilities rather than assuming every discovered service is controllable.
+
 ### Storage
 
 Retain `ObservationStorage` as the existing historical-observation contract and `InMemoryStorage` as a reference implementation. Live snapshots remain distinct from remembered observations. A persisted record is not evidence of current availability.
@@ -87,6 +105,8 @@ Preserve the existing SHA semantics where practical:
 - `GET /network/discoveries/events` — future-only SSE with bounded per-client buffering.
 - Health diagnostics may be exposed through a separate route, with runtime-health semantics explicitly documented.
 
+Future authenticated HTTP routes may also expose supported service operations, connection/session management, and pairing/unpairing; these are **not** part of the initial read-only migration.
+
 HTTP handlers perform validation and serialization, then delegate to SNF runtime/services. They do not instantiate their own engine. Default examples bind localhost; exposing network inventory remotely requires deliberate authentication and deployment controls.
 
 ## Implementation sequence
@@ -95,8 +115,9 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 2. **Consolidation PR:** migrate SHA's generic runtime, subscriber fan-out, service projection, and HTTP schemas/routes into SNF. Preserve behavior; do not implement correlation or SQL in this PR.
 3. **Entity-resolution PR:** deterministic, evidence-based protocol consolidation and cross-protocol correlation with provenance and lifecycle tests.
 4. **Persistence PR:** explicit durable-inventory and reconciliation contracts; add SQLite only after contract tests.
-5. **Real-device validation:** SSDP, mDNS, OpenSLP, BLE, disconnect/reconnect, multiple clients, restart and cancellation behavior.
-6. **Retire SHA only after parity:** verify no reusable code or documentation remains solely there; archive before considering deletion.
+5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls.
+6. **Real-device validation:** SSDP, mDNS, OpenSLP, BLE, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
+7. **Retire SHA only after parity:** verify no reusable code or documentation remains solely there; archive before considering deletion.
 
 ## Acceptance criteria for consolidation
 
@@ -109,6 +130,7 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 - `py.typed` and strict typing checks are considered for published Python consumers.
 - Documentation and examples cover embedding in an existing application.
 - No home-automation-specific classes or dependency on SHA are introduced.
+- Generic interaction and pairing contracts are explicitly deferred from the consolidation PR, but remain part of SNF's planned scope.
 
 ## Alternatives considered
 
@@ -120,4 +142,4 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 ## Consequences and risks
 
-The framework becomes more capable and owns more lifecycle complexity. The implementation must avoid double consumption, unsafe correlation, unbounded queues, blocking slow subscribers, and accidental HTTP exposure. The existing discovery-centric design document and developer guide must be revised after this ADR is accepted; until then, they describe the current implementation rather than the target architecture.
+The framework becomes more capable and owns more lifecycle complexity, including explicit connection and pairing state in future phases. The implementation must avoid double consumption, unsafe correlation, unbounded queues, blocking slow subscribers, and accidental HTTP exposure. The existing discovery-centric design document and developer guide must be revised after this ADR is accepted; until then, they describe the current implementation rather than the target architecture.
