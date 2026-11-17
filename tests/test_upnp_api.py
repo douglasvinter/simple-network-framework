@@ -44,6 +44,8 @@ async def test_http_inspection_end_to_end_and_error_isolation():
             response = await client.get("/network/discoveries/inspect", params={"identifier": observation.identifier})
         assert response.status_code == 200
         assert response.json()["friendly_name"] == "Samsung TV"
+        assert response.json()["error"] == {}
+        assert "device" not in response.json()
         mocked.assert_awaited_once_with(observation)
         missing = await client.get("/network/discoveries/inspect", params={"identifier": "missing"})
         assert missing.status_code == 404
@@ -88,7 +90,7 @@ async def test_plain_text_response_error_contains_raw_evidence():
             response = await client.get(
                 "/network/discoveries/inspect", params={"identifier": observation.identifier}
             )
-    assert response.status_code == 502
+    assert response.status_code == 422
     assert response.json()["error"]["code"] == "UNSUPPORTED_DESCRIPTION_FORMAT"
     assert response.json()["error"]["raw_response"] == "status=ok"
     assert response.json()["device"] == {
@@ -131,3 +133,28 @@ async def test_failure_uses_only_semantically_valid_ssdp_metadata():
     assert response.json()["device"]["device_type"] == "urn:schemas-upnp-org:device:MediaRenderer:1"
     assert response.json()["device"]["friendly_name"] == "Living Room TV"
     assert response.json()["device"]["services"] == []
+
+
+
+@pytest.mark.asyncio
+async def test_malformed_xml_returns_422_with_identity_fallback():
+    observation = DiscoveryObservation(
+        "ssdp", "uuid:broken", "Device",
+        metadata={"udn": "uuid:broken"},
+    )
+    app = FastAPI()
+    app.include_router(create_router(SnapshotRuntime([observation])), prefix="/network")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "snf.api.router.UPnPInspector.inspect_observation",
+            new_callable=AsyncMock,
+            side_effect=UPnPInspectionError(
+                "Malformed UPnP description XML", code="MALFORMED_DESCRIPTION"
+            ),
+        ):
+            response = await client.get(
+                "/network/discoveries/inspect", params={"identifier": observation.identifier}
+            )
+    assert response.status_code == 422
+    assert response.json()["device"]["udn"] == "uuid:broken"
+    assert response.json()["error"]["code"] == "MALFORMED_DESCRIPTION"

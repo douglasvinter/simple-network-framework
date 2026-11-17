@@ -19,7 +19,7 @@ To inspect multiple SSDP advertisements, `inspect_observations(observations)` re
 
 `GET /network/discoveries/inspect?identifier=<url-encoded SSDP USN>`
 
-This is an **explicit network operation**, not a background enrichment job. Use an identifier returned by `GET /network/discoveries?protocol=ssdp`. Responses are structured UPnP device descriptions. Unknown identifiers return 404; failed inspections return 502; unavailable SSDP protocol returns 422; an unstarted runtime returns 503.
+This is an **explicit network operation**, not a background enrichment job. Use an identifier returned by `GET /network/discoveries?protocol=ssdp`. Responses are structured UPnP device descriptions with an `error` key. Unknown identifiers return 404; unsupported or malformed descriptions return 422; upstream fetch failures return 502; unavailable SSDP protocol returns 422; an unstarted runtime returns 503.
 
 ## Security and compatibility
 
@@ -29,7 +29,7 @@ Only plain HTTP device descriptions at private LAN addresses are supported. DNS 
 
 Successful inspection retains the existing UPnP device fields, including UDN,
 device type, friendly name, manufacturer, model, services with SCPD/control/event
-URLs, and recursive embedded devices. Failures return HTTP 502 with an `error`
+URLs, and recursive embedded devices, plus `error: {}`. Failures return HTTP 422 for unsupported/malformed descriptions or 502 for upstream failures, with an `error`
 object containing `code`, `message`, and `raw_response`. The raw response
 is bounded by `max_bytes` and is included for unsupported or malformed
 descriptions (e.g. Netflix MDX returning `status=ok`).
@@ -48,3 +48,8 @@ only from an explicit friendly-name header. The SSDP `SERVER` header is
 **not** a friendly name; missing fields remain null, and services/embedded
 devices are empty because no UPnP description was parsed. The fallback
 represents the advertisement, not a verified physical-device identity.
+
+The successful HTTP 200 payload retains UPnP device fields at the top level
+and always includes `"error": {}`. Failed inspections retain the `device`
+fallback wrapper and a nonempty `error` object. An endpoint that returns
+plain-text `status=ok` rather than a UPnP XML description returns HTTP 422.

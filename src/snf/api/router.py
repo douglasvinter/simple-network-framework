@@ -13,6 +13,7 @@ from sse_starlette import EventSourceResponse, ServerSentEvent
 from snf.api.schemas import (
     DiscoveryObservationResponse,
     InspectionErrorResponse,
+    InspectionSuccessResponse,
     NetworkEntityResponse,
     UPnPDeviceResponse,
 )
@@ -110,8 +111,11 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
 
     @router.get(
         "/discoveries/inspect",
-        response_model=UPnPDeviceResponse,
-        responses={502: {"model": InspectionErrorResponse}},
+        response_model=InspectionSuccessResponse,
+        responses={
+            422: {"model": InspectionErrorResponse},
+            502: {"model": InspectionErrorResponse},
+        },
     )
     async def inspect_discovery(identifier: str) -> object:
         """Explicit, read-only inspection of a discovered SSDP advertisement."""
@@ -124,10 +128,18 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         if observation is None:
             raise HTTPException(status_code=404, detail="SSDP observation not found")
         try:
-            return await UPnPInspector().inspect_observation(observation)
+            device = await UPnPInspector().inspect_observation(observation)
+            return InspectionSuccessResponse.model_validate({
+                **UPnPDeviceResponse.model_validate(device).model_dump(),
+                "error": {},
+            })
         except UPnPInspectionError as exc:
+            status = 422 if exc.code in {
+                "UNSUPPORTED_DESCRIPTION_FORMAT",
+                "MALFORMED_DESCRIPTION",
+            } else 502
             return JSONResponse(
-                status_code=502,
+                status_code=status,
                 content=InspectionErrorResponse(
                     device=_advertised_device(observation),
                     error={

@@ -80,6 +80,10 @@ class InspectionErrorDetail(BaseModel):
     raw_response: str | None = None
 
 
+class InspectionSuccessResponse(UPnPDeviceResponse):
+    error: dict[str, str] = Field(default_factory=dict)
+
+
 class InspectionErrorResponse(BaseModel):
     device: UPnPDeviceResponse
     error: InspectionErrorDetail
