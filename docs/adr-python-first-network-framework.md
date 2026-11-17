@@ -20,7 +20,7 @@ SNF owns protocol discovery, **protocol-aware inspection and capability resoluti
 
 | Area | SNF | Consuming application |
 | --- | --- | --- |
-| Protocol discovery and normalization | Owns | Configures |
+| Protocol discovery and normalization (SSDP, mDNS, OpenSLP, BLE, Bluetooth Classic) | Owns | Configures |
 | Live observation registry and lifecycle | Owns | Reads/subscribes |
 | Network identity resolution and evidence | Owns | May add application knowledge |
 | Service/endpoint aggregation | Owns | Uses |
@@ -73,6 +73,8 @@ A convenience application factory may also be provided. The host owns runtime st
 
 **BLE / GATT enrichment:** BLE advertisements identify candidate peripherals, not their full capabilities. When explicitly requested or permitted by an inspection policy, a supported BLE backend may connect, enumerate GATT services, characteristics, descriptors and properties, and read appropriate standard characteristics (for example, Device Information Service). Record UUIDs, characteristic properties, observed values where safe, inspection status, and provenance in SNF inventory. Reads may require authentication and can have device-specific side effects; do not automatically pair, write, subscribe to notifications, or assume every peripheral can be inspected. Connections must have bounded concurrency, timeouts, and reliable cleanup. BLE identity may be unstable because of privacy address rotation.
 
+**Bluetooth Classic / BR/EDR (including audio devices):** SNF must also support Bluetooth Classic independently of BLE. Discovery should enumerate discoverable BR/EDR devices through a supported OS/backend, and inspection should use SDP or platform-provided service/profile information to identify advertised capabilities (for example, A2DP, AVRCP, HFP/HSP when exposed). SNF's inventory must distinguish Classic, BLE, and dual-mode observations and retain provenance without assuming a shared MAC address always proves stable physical identity. Generic pairing/unpairing, trust/bond state, connection/disconnection, and profile/service availability belong in SNF when supported by the host OS/backend. Platform support varies across Windows, Linux, and macOS; expose supported operations and explicit unsupported errors rather than promise uniform behavior. For audio, SNF should inspect and manage available profiles/devices using the OS Bluetooth/audio stack; **implementing an A2DP audio codec/streaming engine or vendor-specific media behavior is not an SNF requirement**. Do not assume that BLE's Bleak backend supports Classic discovery or audio profiles.
+
 **Other discovery protocols:** mDNS/DNS-SD and OpenSLP can provide service types, endpoints, and metadata; protocol-specific inspectors may enrich services when a supported description or interrogation mechanism exists. Do not pretend the discovery protocol itself defines universal service actions or pairing.
 
 **Inventory projection (conceptual, not an implemented schema):**
@@ -93,7 +95,7 @@ NetworkEntity
 
 Maintain distinct states for discovery, inspection, and interaction. Inspection failures must not erase valid discovery observations or be confused with device removal. Cache invalidation, reinspection, stale capabilities, and restart reconciliation need explicit semantics. SNF must expose the enriched inventory to Python clients and, optionally, read-only HTTP endpoints; the current `DiscoveryObservation` model remains available unchanged until a deliberate migration.
 
-**SNF vs SHA:** SNF understands UPnP actions, GATT characteristics, generic protocol operations, and capability metadata. SHA understands the vendor/model-specific meaning of those operations, including proprietary payloads, app launching, and appliance workflows. A writable characteristic or advertised action is not proof of a universally meaningful device command.
+**SNF vs SHA:** SNF understands UPnP actions, BLE GATT characteristics, Bluetooth Classic SDP/profiles, generic protocol operations, and capability metadata. SHA understands the vendor/model-specific meaning of those operations, including proprietary payloads, app launching, and appliance workflows. A writable characteristic or advertised action is not proof of a universally meaningful device command.
 
 ### Identity and entity resolution (subsequent phase)
 
@@ -111,7 +113,7 @@ Discovery is not the framework's final boundary. SNF will expose **generic netwo
 
 - **Service consumption:** resolve an advertised service, open a protocol-supported interaction, send requests or invoke standardized operations, and return protocol-level responses/errors. A discovered service is not automatically callable; adapters must advertise supported operations.
 - **Connections and sessions:** explicit connect/disconnect and session lifecycle management where the underlying protocol or library supports it, including timeouts, cancellation, cleanup, and failure reporting.
-- **Pairing and unpairing:** explicit operations for protocols/backends that provide them (for example, Bluetooth pairing via a suitable OS backend). Pairing is not a universal concept for SSDP, mDNS, or OpenSLP, and must not be fabricated as one.
+- **Pairing and unpairing:** explicit operations for protocols/backends that provide them (for example, BLE or Bluetooth Classic pairing via a suitable OS backend). Pairing is not a universal concept for SSDP, mDNS, or OpenSLP, and must not be fabricated as one.
 - **Capability discovery:** describe which operations an adapter actually supports, including platform-dependent or unavailable operations. Unsupported operations must fail explicitly rather than silently succeeding.
 - **Python-first and HTTP parity:** supported generic operations are callable from Python without FastAPI; HTTP routes may expose selected operations using the same services, not separate implementations.
 
@@ -148,10 +150,10 @@ HTTP handlers perform validation and serialization, then delegate to SNF runtime
 
 1. **Architecture review (this ADR):** agree on boundaries, ownership, event and lifecycle contracts.
 2. **Consolidation PR:** migrate SHA's generic runtime, subscriber fan-out, service projection, and HTTP schemas/routes into SNF. Preserve behavior; do not implement correlation or SQL in this PR.
-3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
+3. **Inspection and entity-resolution PRs:** introduce protocol-aware inspection and inventory enrichment (UPnP device/SCPD descriptions; opt-in BLE GATT enumeration; Bluetooth Classic SDP/profile inspection), then evidence-based entity correlation with provenance and lifecycle tests. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs. Inspection may provide the stronger identifiers needed for correlation; separate into focused PRs.
 4. **Persistence PR:** explicit durable-inventory and reconciliation contracts; add SQLite only after contract tests.
-5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls.
-6. **Real-device validation:** SSDP LOCATION/SCPD enrichment, BLE GATT inspection, mDNS, OpenSLP, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
+5. **Generic interaction contracts and adapters:** add service consumption, supported connection/session operations, and BLE/Classic pairing/unpairing as focused, independently tested increments; validate real backend/platform support and access controls. Bluetooth Classic discovery and audio-profile awareness require a backend separate from BLE-only scanning.
+6. **Real-device validation:** SSDP LOCATION/SCPD enrichment, BLE GATT inspection, Bluetooth Classic discovery/SDP/audio-profile detection, mDNS, OpenSLP, service invocation, supported pairing flows, disconnect/reconnect, multiple clients, restart and cancellation behavior.
 7. **Retire SHA only after parity:** verify no reusable code or documentation remains solely there; archive before considering deletion.
 
 ## Acceptance criteria for consolidation
