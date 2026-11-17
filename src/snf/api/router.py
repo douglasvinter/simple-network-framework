@@ -238,7 +238,20 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             return failure(status, exc.code, str(exc))
         return BLEInspectionResponse.model_validate({
             "identifier": details.identifier,
-            "services": details.services,
+            "services": [
+                {
+                    "uuid": service.uuid,
+                    "characteristics": [
+                        {
+                            "uuid": characteristic.uuid,
+                            "properties": characteristic.properties,
+                            "descriptors": characteristic.descriptors,
+                        }
+                        for characteristic in service.characteristics
+                    ],
+                }
+                for service in details.services
+            ],
             "error": {},
         })
 
