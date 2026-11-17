@@ -54,7 +54,9 @@ async def test_http_inspection_end_to_end_and_error_isolation():
         assert response.json()["error"] == {}
         assert "device" not in response.json()
         mocked.assert_awaited_once_with(observation)
-        missing = await client.get("/network/discoveries/inspect/upnp", params={"identifier": "missing"})
+        missing = await client.get(
+            "/network/discoveries/inspect/upnp", params={"identifier": "missing"}
+        )
         assert missing.status_code == 404
         assert missing.json() == {
             "device": None,
