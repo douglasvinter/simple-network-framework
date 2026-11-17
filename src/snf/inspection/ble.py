@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from snf.bluetooth.assigned_numbers import uuid_details
 from snf.models import DiscoveryObservation
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,12 +24,15 @@ class BLECharacteristicDetails:
     uuid: str
     properties: tuple[str, ...]
     descriptors: tuple[str, ...]
+    name: str | None = None
+    descriptor_names: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class BLEServiceDetails:
     uuid: str
     characteristics: tuple[BLECharacteristicDetails, ...]
+    name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,12 +66,24 @@ class BLEInspector:
                 services = tuple(
                     BLEServiceDetails(
                         uuid=str(service.uuid),
+                        name=(details["name"] if (details := uuid_details(
+                            str(service.uuid), kind="service"
+                        )) else None),
                         characteristics=tuple(
                             BLECharacteristicDetails(
                                 uuid=str(characteristic.uuid),
                                 properties=tuple(characteristic.properties),
+                                name=(details["name"] if (details := uuid_details(
+                                    str(characteristic.uuid), kind="characteristic"
+                                )) else None),
                                 descriptors=tuple(
                                     str(descriptor.uuid)
+                                    for descriptor in characteristic.descriptors
+                                ),
+                                descriptor_names=tuple(
+                                    details["name"] if (details := uuid_details(
+                                        str(descriptor.uuid), kind="descriptor"
+                                    )) else None
                                     for descriptor in characteristic.descriptors
                                 ),
                             )
