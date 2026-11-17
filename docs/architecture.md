@@ -38,7 +38,7 @@ When mounted at `/network`:
 
 ## Identity and limitations
 
-Neither map nor entity projection is a verified physical-device inventory. SSDP observations with matching valid USN UUIDs are grouped; all others remain separate. One TV may have several SSDP and mDNS records. Do not merge by IP, name, or BLE address alone; BLE privacy addresses may rotate. SSDP observation ports may be UDP response-source ports rather than advertised service ports. `metadata.location` contains the advertised description URL, not a verified control endpoint.
+Neither map nor entity projection is a verified physical-device inventory. SSDP observations with matching valid USN UUIDs are grouped; all others remain separate. Entity IDs use protocol-qualified identity (for example, `ble:AA:BB`); entity responses include observation references rather than duplicating full observation payloads. Full evidence remains available through `/discoveries`. One TV may have several SSDP and mDNS records. Do not merge by IP, name, or BLE address alone; BLE privacy addresses may rotate. SSDP observation ports may be UDP response-source ports rather than advertised service ports. `metadata.location` contains the advertised description URL, not a verified control endpoint.
 
 Implemented: discovery, normalization, live/historical observation contracts, background runtime, subscriptions, REST/SSE.
 

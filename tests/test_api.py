@@ -61,6 +61,10 @@ async def test_http_routes_and_utc_health_timestamp():
             entities = await client.get("/network/entities")
             assert entities.status_code == 200
             assert entities.json()[0]["identity_source"] == "observation"
+            assert entities.json()[0]["id"] == "fake:one"
+            assert entities.json()[0]["observations"] == [
+                {"protocol": "fake", "identifier": "one"}
+            ]
             grouped = await client.get("/network/discoveries/map")
             assert grouped.json()["fake"]["one"]["name"] == "TV"
             invalid = await client.get("/network/discoveries?protocol=unknown")

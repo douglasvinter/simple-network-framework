@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from urllib.parse import quote
 from uuid import UUID
 
 from snf.models import DiscoveryObservation, Service
@@ -43,10 +42,7 @@ class EntityResolver:
             if udn is not None:
                 key = f"ssdp:{udn}"
             else:
-                key = (
-                    f"observation:{quote(observation.protocol, safe='')}:"
-                    f"{quote(observation.identifier, safe='')}"
-                )
+                key = f"{observation.protocol}:{observation.identifier}"
             groups.setdefault(key, []).append(observation)
 
         entities: list[NetworkEntity] = []
