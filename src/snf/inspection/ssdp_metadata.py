@@ -34,10 +34,18 @@ class SSDPMetadataParser:
     """Extract only identity attributes supported by advertised SSDP metadata."""
 
     def parse(self, observation: DiscoveryObservation) -> AdvertisedDeviceMetadata:
-        udn = _text(observation.metadata.get("udn"))
-        if not udn or not udn.lower().startswith("uuid:"):
-            usn = _text(observation.metadata.get("usn"))
-            udn = usn.split("::", 1)[0] if usn and usn.lower().startswith("uuid:") else None
+        udn = next(
+            (
+                candidate.split("::", 1)[0]
+                for raw in (
+                    observation.metadata.get("udn"),
+                    observation.metadata.get("usn"),
+                    observation.identifier,
+                )
+                if (candidate := _text(raw)) and candidate.lower().startswith("uuid:")
+            ),
+            None,
+        )
         device_type = next(
             (value for service in observation.services
              if (value := _text(service.service_type))
