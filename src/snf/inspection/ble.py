@@ -11,6 +11,11 @@ from snf.models import DiscoveryObservation
 _LOGGER = logging.getLogger(__name__)
 
 
+def _assigned_name(uuid: str, kind: str) -> str | None:
+    details = uuid_details(uuid, kind=kind)
+    return details["name"] if details is not None else None
+
+
 class BLEInspectionError(ValueError):
     """Stable error code for failed BLE inspection."""
 
@@ -66,24 +71,18 @@ class BLEInspector:
                 services = tuple(
                     BLEServiceDetails(
                         uuid=str(service.uuid),
-                        name=(details["name"] if (details := uuid_details(
-                            str(service.uuid), kind="service"
-                        )) else None),
+                        name=_assigned_name(str(service.uuid), "service"),
                         characteristics=tuple(
                             BLECharacteristicDetails(
                                 uuid=str(characteristic.uuid),
                                 properties=tuple(characteristic.properties),
-                                name=(details["name"] if (details := uuid_details(
-                                    str(characteristic.uuid), kind="characteristic"
-                                )) else None),
+                                name=_assigned_name(str(characteristic.uuid), "characteristic"),
                                 descriptors=tuple(
                                     str(descriptor.uuid)
                                     for descriptor in characteristic.descriptors
                                 ),
                                 descriptor_names=tuple(
-                                    details["name"] if (details := uuid_details(
-                                        str(descriptor.uuid), kind="descriptor"
-                                    )) else None
+                                    _assigned_name(str(descriptor.uuid), "descriptor")
                                     for descriptor in characteristic.descriptors
                                 ),
                             )
