@@ -55,15 +55,14 @@ async def test_inspector_uses_fresh_resolution_without_mutating_observation():
     )
     instance = MagicMock()
     instance.async_get_service_info = AsyncMock(return_value=info)
-    context = MagicMock()
-    context.__aenter__ = AsyncMock(return_value=instance)
-    context.__aexit__ = AsyncMock(return_value=None)
-    with patch("zeroconf.asyncio.AsyncZeroconf", return_value=context):
+    instance.async_close = AsyncMock()
+    with patch("zeroconf.asyncio.AsyncZeroconf", return_value=instance):
         result = await MDNSInspector().inspect_observation(record)
     assert result.properties == {"features": "0x1"}
     instance.async_get_service_info.assert_awaited_once_with(
         "_airplay._tcp.local.", "Living Room._airplay._tcp.local.", timeout=3000
     )
+    instance.async_close.assert_awaited_once()
     assert record == observation()
 
 
@@ -72,10 +71,8 @@ async def test_unavailable_service_returns_stable_error():
     pytest.importorskip("zeroconf")
     instance = MagicMock()
     instance.async_get_service_info = AsyncMock(return_value=None)
-    context = MagicMock()
-    context.__aenter__ = AsyncMock(return_value=instance)
-    context.__aexit__ = AsyncMock(return_value=None)
-    with patch("zeroconf.asyncio.AsyncZeroconf", return_value=context):
+    instance.async_close = AsyncMock()
+    with patch("zeroconf.asyncio.AsyncZeroconf", return_value=instance):
         with pytest.raises(MDNSInspectionError) as caught:
             await MDNSInspector().inspect_observation(observation())
     assert caught.value.code == "SERVICE_UNAVAILABLE"
