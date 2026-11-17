@@ -15,12 +15,13 @@ dependencies = []
 ssdp = ["async-upnp-client>=0.49.0"]
 mdns = ["zeroconf>=0.154.0"]
 ble = ["bleak>=0.22.3"]
+api = ["fastapi>=0.115,<1", "sse-starlette>=2.2,<4"]
 all = [
     "async-upnp-client>=0.49.0",
     "zeroconf>=0.154.0",
     "bleak>=0.22.3",
 ]
-dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.14", "mypy>=1.18"]
+dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.14", "mypy>=1.18", "httpx>=0.27"]
 
 [project.entry-points."snf.protocols"]
 ssdp = "snf.adapters.ssdp:SSDPPlugin"

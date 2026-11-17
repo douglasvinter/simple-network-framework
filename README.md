@@ -321,3 +321,55 @@ Discovery data is untrusted input. SNF does not automatically fetch SSDP LOCATIO
 URLs, connect to discovered devices, or invoke discovered services. Applications
 must validate destinations and enforce their own network access policy before
 making follow-up requests.
+
+## Embedded background runtime and optional HTTP API
+
+`NetworkRuntime` owns one background consumer of `DiscoveryEngine.discover()`, maintains the
+same live observation snapshot, and fans out future-only events to bounded independent
+subscribers. It does not merge protocol identities or inspect advertised services.
+
+```python
+import asyncio
+from snf import NetworkRuntime
+
+async def main():
+    async with NetworkRuntime() as network:
+        print(network.snapshot())
+        subscription = network.subscribe()
+        try:
+            async for event in subscription:
+                print(event.state, event.observation)
+        finally:
+            subscription.close()
+
+asyncio.run(main())
+```
+
+Install the optional HTTP adapter with `pip install "simple-network-framework[api]"`.
+It never starts a server on import; mount it in your own FastAPI application:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from snf import NetworkRuntime
+from snf.api import create_router
+
+network = NetworkRuntime()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with network:
+        yield
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(create_router(network), prefix="/network")
+```
+
+The adapter exposes `GET /network/discoveries`, `/network/discoveries/map`,
+`/network/discoveries/events` (SSE), and `/network/health`.
+Health includes an ISO-8601 UTC `timestamp` generated for each request, status,
+discovery_running, observation count and configured protocols. A completed discovery
+stream is reported as degraded even if its last observations remain available.
+SSE subscribers receive only future events; slow subscribers are disconnected.
+No replay or durable delivery is promised. HTTP exposure should be protected
+appropriately; use localhost by default.
