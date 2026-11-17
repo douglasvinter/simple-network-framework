@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
-from http import HTTPStatus
 import socket
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from http import HTTPStatus
 from urllib.parse import urljoin, urlsplit
+
+import aiohttp
 
 from snf.inspection.constants import (
     DEFAULT_MAX_CONCURRENCY,
@@ -20,9 +22,6 @@ from snf.inspection.constants import (
     SSDP_PROTOCOL,
 )
 from snf.inspection.xml import child_text, children, local_name
-
-import aiohttp
-
 from snf.models import DiscoveryObservation
 
 

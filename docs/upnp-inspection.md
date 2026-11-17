@@ -62,3 +62,13 @@ error envelope. A missing/blank identifier returns HTTP 422 with
 `RUNTIME_UNAVAILABLE`. When no observation is available, `device` is
 `null` rather than fabricated. These endpoint-specific failures do not
 use FastAPI's `detail` key. Other SNF routes are unaffected.
+
+## Refactoring boundaries
+
+The SSDP fallback identity parser is now `snf.inspection.ssdp_metadata.SSDPMetadataParser`,
+returning immutable `AdvertisedDeviceMetadata`. It is independent of FastAPI and
+never equates protocol advertisements to physical devices. Stateless XML helpers
+are available from `snf.inspection.xml` for reuse by XML-based inspectors.
+Named inspection limits live in `snf.inspection.constants`. UPnP service
+parsing is separated from recursive device parsing. No additional runtime
+dependencies were introduced.
