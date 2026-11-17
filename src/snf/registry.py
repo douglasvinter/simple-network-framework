@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-from snf.models import DiscoveryObservation, DiscoveryEvent, DiscoveryState
+from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState
 
 
 class ObservationRegistry:
@@ -48,7 +48,11 @@ class ObservationRegistry:
         """Return inventory records, optionally restricted to one protocol."""
         if protocol is None:
             return tuple(self._observations.values())
-        return tuple(device for device in self._observations.values() if device.protocol == protocol)
+        return tuple(
+            observation
+            for observation in self._observations.values()
+            if observation.protocol == protocol
+        )
 
     def _trim(self) -> None:
         while len(self._observations) > self.max_entries:
