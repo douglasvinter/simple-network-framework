@@ -211,11 +211,19 @@ class BLEPlugin:
                 and previous.services == record.services
                 and old_metadata == new_metadata
             )
+            # Compare against the queued event, not the last advertisement.
+            # Small consecutive fluctuations must not hide a cumulative change.
+            pending = self._pending.get(key)
+            baseline_rssi = (
+                pending[-1].observation.metadata.get("rssi")
+                if pending and pending[-1].state is not DiscoveryState.REMOVED
+                else old_rssi
+            )
             rssi_significant = (
                 self.emit_rssi_updates
-                and isinstance(old_rssi, int)
+                and isinstance(baseline_rssi, int)
                 and isinstance(new_rssi, int)
-                and abs(old_rssi - new_rssi) >= self.rssi_update_threshold
+                and abs(baseline_rssi - new_rssi) >= self.rssi_update_threshold
             )
             if unchanged and not rssi_significant:
                 return
