@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncIterator
-from collections import OrderedDict
 from importlib.util import find_spec
 from typing import Any, Literal, Protocol
 
@@ -35,14 +34,11 @@ class BLEPlugin:
         device_timeout: float = 15.0,
         rssi_update_threshold: int = 5,
         emit_rssi_updates: bool = False,
-        max_pending_devices: int = 1024,
     ) -> None:
         if device_timeout <= 0:
             raise ValueError("device_timeout must be positive")
         if rssi_update_threshold < 1:
             raise ValueError("rssi_update_threshold must be at least 1")
-        if max_pending_devices < 1:
-            raise ValueError("max_pending_devices must be at least 1")
         if find_spec("bleak") is None:
             raise ImportError(
                 "Install BLE support with: pip install 'simple-network-framework[ble]'"
@@ -52,10 +48,9 @@ class BLEPlugin:
         self.device_timeout = device_timeout
         self.rssi_update_threshold = rssi_update_threshold
         self.emit_rssi_updates = emit_rssi_updates
-        self.max_pending_devices = max_pending_devices
         self._scanner: Any = None
         self._events: asyncio.Queue[str | None] = asyncio.Queue()
-        self._pending: OrderedDict[str, list[DiscoveryEvent]] = OrderedDict()
+        self._pending: dict[str, list[DiscoveryEvent]] = {}
         self._last_seen: dict[str, float] = {}
         self._last_emitted: dict[str, DiscoveryObservation] = {}
         self._expiry_task: asyncio.Task[None] | None = None
@@ -138,34 +133,31 @@ class BLEPlugin:
         for field in ("manufacturer_data", "service_data"):
             new[field] = {**old.get(field, {}), **new[field]}
 
-        # Recompute the fingerprint from reconciled evidence, not one packet.
-        from snf.bluetooth.fingerprints import identify_ble_device
-
+        # Derived metadata is recalculated only for fields affected by merging.
         new["device_identification"] = identify_ble_device(
             {int(key): bytes.fromhex(value) for key, value in new["manufacturer_data"].items()},
             local_name=new["local_name"],
         )
         new["company_names"] = {
-            key: name
+            key: company_name(int(key))
             for key in new["manufacturer_data"]
-            if (name := company_name(int(key))) is not None
+            if company_name(int(key)) is not None
         }
         new["service_data_names"] = {
             uuid: details["name"]
             for uuid in new["service_data"]
             if (details := uuid_details(uuid, kind="service")) is not None
         }
-
-        service_uuids = tuple(dict.fromkeys((*old["service_uuids"], *new["service_uuids"])))
-        new["service_uuids"] = service_uuids
+        uuids = tuple(dict.fromkeys((*old["service_uuids"], *new["service_uuids"])))
+        new["service_uuids"] = uuids
         new["service_names"] = {
             uuid: details["name"]
-            for uuid in service_uuids
+            for uuid in uuids
             if (details := uuid_details(uuid, kind="service")) is not None
         }
         services = tuple(
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
-            for uuid in service_uuids
+            for uuid in uuids
         )
         name = new["local_name"] or (
             previous.name if previous.name != current.identifier else current.name
@@ -180,32 +172,13 @@ class BLEPlugin:
         )
 
     def _enqueue(self, event: DiscoveryEvent) -> None:
-        """Coalesce updates by address while preserving removal/rediscovery order."""
+        """Coalesce observations without losing removal/rediscovery transitions."""
         key = event.observation.identifier
         pending = self._pending.get(key)
         if pending is None:
-            if len(self._pending) >= self.max_pending_devices:
-                if event.state is DiscoveryState.REMOVED:
-                    # Removal must not be silently lost; evict an older pending update.
-                    victim = next(
-                        (address for address, events in self._pending.items()
-                         if events[-1].state is not DiscoveryState.REMOVED),
-                        None,
-                    )
-                    if victim is not None:
-                        del self._pending[victim]
-                        _LOGGER.warning("BLE event capacity reached; displaced update for %s", victim)
-                    else:
-                        _LOGGER.warning("BLE event capacity reached; dropping removal for %s", key)
-                        return
-                else:
-                    _LOGGER.warning("BLE pending event capacity reached; dropping event for %s", key)
-                    return
             self._pending[key] = [event]
             self._events.put_nowait(key)
-            return
-
-        if event.state is DiscoveryState.REMOVED:
+        elif event.state is DiscoveryState.REMOVED:
             if pending[-1].state is DiscoveryState.REMOVED:
                 pending[-1] = event
             else:
@@ -214,21 +187,11 @@ class BLEPlugin:
             pending.append(event)
         else:
             pending[-1] = event
-        # Keep at most the latest lifecycle transition and its predecessor.
-        if len(pending) > 2:
-            del pending[:-2]
 
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
             return
         key = str(device.address)
-        if (
-            key not in self._last_seen
-            and key not in self._pending
-            and len(self._pending) >= self.max_pending_devices
-        ):
-            _LOGGER.warning("BLE pending event capacity reached; ignoring new device %s", key)
-            return
         current = self._to_device(device, advertisement_data)
         self._last_seen[key] = asyncio.get_running_loop().time()
         previous = self._last_emitted.get(key)
