@@ -41,10 +41,10 @@ async def test_partial_advertisements_reconcile_before_enqueue():
     p = plugin()
     d = device()
     p._on_advertisement(d, advertisement(
-        name="Living Room", services=("180f",), manufacturer={76: b"\\x01"}
+        name="Living Room", services=("180f",), manufacturer={76: b"\x01"}
     ))
     p._on_advertisement(d, advertisement(
-        rssi=-62, data={"180a": b"\\x02"}
+        rssi=-62, data={"180a": b"\x02"}
     ))
     latest = p._pending[d.address][-1].observation
     assert latest.name == "Living Room"
@@ -105,6 +105,6 @@ async def test_removal_then_rediscovery_preserves_lifecycle():
     ))
     p._on_advertisement(d, advertisement(name="Sensor"))
     assert [event.state for event in p._pending[d.address]] == [
-        DiscoveryState.REMOVED, DiscoveryState.ADDED
+        DiscoveryState.ADDED, DiscoveryState.REMOVED, DiscoveryState.ADDED
     ]
     assert p._events.qsize() == 1
