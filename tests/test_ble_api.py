@@ -37,7 +37,7 @@ async def test_ble_inspection_api_is_explicit_and_does_not_mutate_snapshot():
     details = BLEDeviceDetails(observation.identifier, (BLEServiceDetails("180f", ()),))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         with patch(
-            "snf.api.router.BLEInspector.inspect_observation",
+            "snf.runtime.BLEInspector.inspect_observation",
             new_callable=AsyncMock,
             return_value=details,
         ) as mocked:
@@ -55,7 +55,7 @@ async def test_ble_inspection_api_is_explicit_and_does_not_mutate_snapshot():
         assert invalid.json()["error"]["code"] == "INVALID_IDENTIFIER"
 
         with patch(
-            "snf.api.router.BLEInspector.inspect_observation",
+            "snf.runtime.BLEInspector.inspect_observation",
             new_callable=AsyncMock,
             side_effect=BLEInspectionError("Cannot connect", code="CONNECTION_FAILED"),
         ):
