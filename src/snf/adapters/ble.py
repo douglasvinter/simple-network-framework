@@ -53,6 +53,7 @@ class BLEPlugin:
         self._pending: dict[str, list[DiscoveryEvent]] = {}
         self._last_seen: dict[str, float] = {}
         self._last_emitted: dict[str, DiscoveryObservation] = {}
+        self._delivered_rssi: dict[str, int] = {}
         self._expiry_task: asyncio.Task[None] | None = None
         self._running = False
 
@@ -211,13 +212,13 @@ class BLEPlugin:
                 and previous.services == record.services
                 and old_metadata == new_metadata
             )
-            # Compare against the queued event, not the last advertisement.
-            # Small consecutive fluctuations must not hide a cumulative change.
+            # Compare against the pending event or the last delivered event,
+            # never the latest advertisement (which may have been suppressed).
             pending = self._pending.get(key)
             baseline_rssi = (
                 pending[-1].observation.metadata.get("rssi")
                 if pending and pending[-1].state is not DiscoveryState.REMOVED
-                else old_rssi
+                else self._delivered_rssi.get(key)
             )
             rssi_significant = (
                 self.emit_rssi_updates
@@ -237,6 +238,7 @@ class BLEPlugin:
         self._pending.clear()
         self._last_seen.clear()
         self._last_emitted.clear()
+        self._delivered_rssi.clear()
         self._scanner = BleakScanner(
             detection_callback=self._on_advertisement,
             service_uuids=self.service_uuids,
@@ -266,6 +268,7 @@ class BLEPlugin:
             for address in expired:
                 self._last_seen.pop(address, None)
                 self._last_emitted.pop(address, None)
+                self._delivered_rssi.pop(address, None)
                 device = DiscoveryObservation(protocol=self.name, identifier=address, name=address)
                 self._enqueue(DiscoveryEvent(DiscoveryState.REMOVED, device))
 
@@ -277,6 +280,12 @@ class BLEPlugin:
             if key is None:
                 return
             for event in self._pending.pop(key, ()):
+                if event.state is DiscoveryState.REMOVED:
+                    self._delivered_rssi.pop(key, None)
+                else:
+                    rssi = event.observation.metadata.get("rssi")
+                    if isinstance(rssi, int):
+                        self._delivered_rssi[key] = rssi
                 yield event
 
     async def stop(self) -> None:
