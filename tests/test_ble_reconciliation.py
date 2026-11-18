@@ -1,4 +1,4 @@
-"""BLE reconciliation, RSSI policy and bounded pending event tests."""
+"""BLE reconciliation, RSSI policy and pending-event coalescing tests."""
 
 import asyncio
 from types import SimpleNamespace
