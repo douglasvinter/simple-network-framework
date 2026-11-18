@@ -7,6 +7,7 @@ from types import ModuleType
 import pytest
 
 from snf import DiscoveryEngine, DiscoveryState, InMemoryStorage
+from snf.adapters import ssdp
 from snf.adapters.ssdp import SSDPPlugin
 
 
@@ -17,7 +18,10 @@ async def test_real_ssdp_adapter_and_engine_with_mocked_network_boundary(monkeyp
     async_upnp_client.__path__ = []
     search_module = ModuleType("async_upnp_client.search")
 
-    async def fake_async_search(*, async_callback, timeout, search_target):
+    monkeypatch.setattr(ssdp, "_default_route_ipv4", lambda: "192.0.2.10")
+
+    async def fake_async_search(*, async_callback, source, timeout, search_target):
+        assert source == ("192.0.2.10", 0)
         assert timeout == 2
         assert search_target == "ssdp:all"
         await async_callback(
@@ -71,7 +75,10 @@ async def test_ssdp_preserves_distinct_service_advertisements_with_shared_udn(mo
         "uuid:tv-123::urn:schemas-upnp-org:service:AVTransport:1",
     )
 
-    async def fake_async_search(*, async_callback, timeout, search_target):
+    monkeypatch.setattr(ssdp, "_default_route_ipv4", lambda: "192.0.2.10")
+
+    async def fake_async_search(*, async_callback, source, timeout, search_target):
+        assert source == ("192.0.2.10", 0)
         for usn in usns:
             await async_callback({"_host": "192.0.2.40", "USN": usn, "ST": usn.split("::", 1)[-1]})
         plugin._running = False
