@@ -34,6 +34,8 @@ async def test_ble_suppresses_small_rssi_fluctuations():
     plugin._events = asyncio.Queue()
     plugin._last_seen = {}
     plugin._last_emitted = {}
+    plugin._pending = {}
+    plugin.emit_rssi_updates = True
     plugin.rssi_update_threshold = 5
 
     device = SimpleNamespace(address="AA:BB:CC:DD:EE:FF", name="Sensor")
@@ -52,4 +54,5 @@ async def test_ble_suppresses_small_rssi_fluctuations():
 
     advertisement.rssi = -66
     plugin._on_advertisement(device, advertisement)
-    assert plugin._events.qsize() == 2
+    assert plugin._events.qsize() == 1
+    assert plugin._pending[device.address][-1].observation.metadata["rssi"] == -66
