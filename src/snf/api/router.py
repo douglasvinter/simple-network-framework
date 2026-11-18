@@ -129,7 +129,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except ValueError as exc:
             return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
-            observations = runtime.snapshot(protocol="ssdp")
+            runtime.snapshot(protocol="ssdp")
         except RuntimeError as exc:
             return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
         observation = runtime.get("ssdp", identifier)
@@ -174,7 +174,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except ValueError as exc:
             return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
-            observations = runtime.snapshot(protocol="mdns")
+            runtime.snapshot(protocol="mdns")
         except RuntimeError as exc:
             return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
         observation = runtime.get("mdns", identifier)
@@ -221,7 +221,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except ValueError as exc:
             return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
-            observations = runtime.snapshot(protocol="ble")
+            runtime.snapshot(protocol="ble")
         except RuntimeError as exc:
             return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
         observation = runtime.get("ble", identifier)
