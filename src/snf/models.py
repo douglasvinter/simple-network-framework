@@ -13,6 +13,7 @@ class DiscoveryState(StrEnum):
     ADDED = "added"
     UPDATED = "updated"
     REMOVED = "removed"
+    EVICTED = "evicted"
 
 
 @dataclass(frozen=True, slots=True)

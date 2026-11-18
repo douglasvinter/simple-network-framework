@@ -163,9 +163,8 @@ class DiscoveryEngine:
                     remaining -= 1
                     continue
                 assert isinstance(item, DiscoveryEvent)
-                normalized = self._registry.process(item)
-                if normalized is not None:
-                    if normalized.state is not DiscoveryState.REMOVED:
+                for normalized in self._registry.process_events(item):
+                    if normalized.state not in (DiscoveryState.REMOVED, DiscoveryState.EVICTED):
                         await self.storage.upsert(normalized.observation)
                     yield normalized
         finally:
