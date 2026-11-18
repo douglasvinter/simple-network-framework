@@ -6,12 +6,12 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterable
 from contextlib import suppress
-from typing import Self
+from typing import Literal, Self, overload
 
 from snf.engine import DiscoveryEngine
-from snf.inspection.ble import BLEInspector
-from snf.inspection.mdns import MDNSInspector
-from snf.inspection.upnp import UPnPInspector
+from snf.inspection.ble import BLEDeviceDetails, BLEInspector
+from snf.inspection.mdns import MDNSInspector, MDNSServiceDetails
+from snf.inspection.upnp import UPnPDevice, UPnPInspector
 from snf.entities import EntityResolver, NetworkEntity
 from snf.models import DiscoveryEvent, DiscoveryObservation
 from snf.plugins import DiscoveryPlugin, create_plugins
@@ -116,7 +116,23 @@ class NetworkRuntime:
             None,
         )
 
-    async def inspect(self, protocol: str, identifier: str) -> object:
+    @overload
+    async def inspect(self, protocol: Literal["ble"], identifier: str) -> BLEDeviceDetails: ...
+
+    @overload
+    async def inspect(self, protocol: Literal["mdns"], identifier: str) -> MDNSServiceDetails: ...
+
+    @overload
+    async def inspect(self, protocol: Literal["ssdp"], identifier: str) -> UPnPDevice: ...
+
+    @overload
+    async def inspect(
+        self, protocol: str, identifier: str
+    ) -> BLEDeviceDetails | MDNSServiceDetails | UPnPDevice: ...
+
+    async def inspect(
+        self, protocol: str, identifier: str
+    ) -> BLEDeviceDetails | MDNSServiceDetails | UPnPDevice:
         """Inspect a live observation on demand without mutating discovery state.
 
         This method performs protocol-specific network I/O. It does not lock,
