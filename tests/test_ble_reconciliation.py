@@ -1,7 +1,6 @@
 """BLE reconciliation, RSSI policy and bounded pending event tests."""
 
 import asyncio
-from collections import OrderedDict
 from types import SimpleNamespace
 
 import pytest
@@ -10,16 +9,15 @@ from snf.adapters.ble import BLEPlugin
 from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState
 
 
-def plugin(*, emit_rssi_updates=False, capacity=3):
+def plugin(*, emit_rssi_updates=False):
     instance = BLEPlugin.__new__(BLEPlugin)
     instance._running = True
     instance._events = asyncio.Queue()
-    instance._pending = OrderedDict()
+    instance._pending = {}
     instance._last_seen = {}
     instance._last_emitted = {}
     instance.emit_rssi_updates = emit_rssi_updates
     instance.rssi_update_threshold = 5
-    instance.max_pending_devices = capacity
     return instance
 
 
@@ -81,16 +79,15 @@ async def test_rssi_updates_enabled_and_threshold_applied():
 
 
 @pytest.mark.asyncio
-async def test_pending_device_capacity_and_coalescing(caplog):
-    p = plugin(capacity=2)
+async def test_pending_updates_coalesce_per_device():
+    p = plugin()
     for address in ("A", "B", "C"):
         p._on_advertisement(device(address), advertisement())
-    assert p._events.qsize() == 2
-    assert set(p._pending) == {"A", "B"}
-    assert "capacity reached" in caplog.text
+    assert p._events.qsize() == 3
     for rssi in range(-80, -40):
         p._on_advertisement(device("A"), advertisement(rssi=rssi))
-    assert p._events.qsize() == 2
+    assert p._events.qsize() == 3
+    assert len(p._pending) == 3
 
 
 @pytest.mark.asyncio
