@@ -196,6 +196,8 @@ class BLEPlugin:
         self._last_seen[key] = asyncio.get_running_loop().time()
         previous = self._last_emitted.get(key)
         record = self._reconcile(previous, current)
+        if previous is not None and record != current:
+            _LOGGER.debug("Reconciled BLE advertisement %s into device %s", key, record.identifier)
         self._last_emitted[key] = record
 
         if previous is not None:
