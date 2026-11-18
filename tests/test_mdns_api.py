@@ -43,7 +43,7 @@ async def test_mdns_inspection_success_and_error_isolation():
     url = "/network/discoveries/inspect/mdns"
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         with patch(
-            "snf.api.router.MDNSInspector.inspect_observation",
+            "snf.runtime.MDNSInspector.inspect_observation",
             new_callable=AsyncMock, return_value=details,
         ) as mocked:
             response = await client.get(url, params={"identifier": "service-id"})
@@ -57,7 +57,7 @@ async def test_mdns_inspection_success_and_error_isolation():
         assert missing.json()["error"]["code"] == "OBSERVATION_NOT_FOUND"
 
         with patch(
-            "snf.api.router.MDNSInspector.inspect_observation",
+            "snf.runtime.MDNSInspector.inspect_observation",
             new_callable=AsyncMock,
             side_effect=MDNSInspectionError(
                 "Service not available", code="SERVICE_UNAVAILABLE"
