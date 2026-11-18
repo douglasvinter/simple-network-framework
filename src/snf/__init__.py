@@ -13,7 +13,7 @@ from snf.models import (
 )
 from snf.plugins import DiscoveryPlugin, create_plugins, load_plugins
 from snf.registry import ObservationRegistry
-from snf.runtime import DiscoverySubscription, NetworkRuntime
+from snf.runtime import DiscoverySubscription, InspectionLookupError, NetworkRuntime
 from snf.storage import InMemoryStorage, ObservationStorage
 
 # Library logging is configured by the consuming application.
@@ -25,6 +25,7 @@ __all__ = [
     "NetworkEntity",
     "ObservationRegistry",
     "NetworkRuntime",
+    "InspectionLookupError",
     "DiscoverySubscription",
     "DiscoveryEngine",
     "DiscoveryEvent",
