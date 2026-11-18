@@ -200,6 +200,9 @@ class BLEPlugin:
             pending.append(event)
         else:
             pending[-1] = event
+        # Keep at most the latest lifecycle transition and its predecessor.
+        if len(pending) > 2:
+            del pending[:-2]
 
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
