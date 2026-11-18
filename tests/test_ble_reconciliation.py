@@ -16,6 +16,7 @@ def plugin(*, emit_rssi_updates=False):
     instance._pending = {}
     instance._last_seen = {}
     instance._last_emitted = {}
+    instance._delivered_rssi = {}
     instance.emit_rssi_updates = emit_rssi_updates
     instance.rssi_update_threshold = 5
     return instance
@@ -108,3 +109,60 @@ async def test_removal_then_rediscovery_preserves_lifecycle():
         DiscoveryState.ADDED, DiscoveryState.REMOVED, DiscoveryState.ADDED
     ]
     assert p._events.qsize() == 1
+
+@pytest.mark.asyncio
+async def test_rssi_threshold_after_pending_event_is_consumed():
+    p = plugin(emit_rssi_updates=True)
+    d = device()
+    stream = p.discover()
+    try:
+        p._on_advertisement(d, advertisement(rssi=-60))
+        first = await anext(stream)
+        assert first.observation.metadata["rssi"] == -60
+        assert p._delivered_rssi[d.address] == -60
+
+        # Each advertisement is below the threshold relative to the previous
+        # advertisement, but the cumulative change exceeds the threshold.
+        for rssi in (-62, -64):
+            p._on_advertisement(d, advertisement(rssi=rssi))
+            assert p._events.empty()
+
+        p._on_advertisement(d, advertisement(rssi=-66))
+        assert p._events.qsize() == 1
+        second = await anext(stream)
+        assert second.observation.metadata["rssi"] == -66
+        assert p._delivered_rssi[d.address] == -66
+
+        p._on_advertisement(d, advertisement(rssi=-69))
+        assert p._events.empty()
+        p._on_advertisement(d, advertisement(rssi=-72))
+        third = await anext(stream)
+        assert third.observation.metadata["rssi"] == -72
+    finally:
+        await stream.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rssi_baseline_resets_after_removal_is_delivered():
+    p = plugin(emit_rssi_updates=True)
+    d = device()
+    stream = p.discover()
+    try:
+        p._on_advertisement(d, advertisement(rssi=-60))
+        await anext(stream)
+        p._last_emitted.pop(d.address)
+        p._last_seen.pop(d.address)
+        p._enqueue(DiscoveryEvent(
+            DiscoveryState.REMOVED,
+            DiscoveryObservation(protocol="ble", identifier=d.address, name=d.address),
+        ))
+        removed = await anext(stream)
+        assert removed.state is DiscoveryState.REMOVED
+        assert d.address not in p._delivered_rssi
+
+        p._on_advertisement(d, advertisement(rssi=-80))
+        added = await anext(stream)
+        assert added.state is DiscoveryState.ADDED
+        assert p._delivered_rssi[d.address] == -80
+    finally:
+        await stream.aclose()

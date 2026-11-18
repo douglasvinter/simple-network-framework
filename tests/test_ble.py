@@ -34,6 +34,7 @@ async def test_ble_suppresses_small_rssi_fluctuations():
     plugin._events = asyncio.Queue()
     plugin._last_seen = {}
     plugin._last_emitted = {}
+    plugin._delivered_rssi = {}
     plugin._pending = {}
     plugin.emit_rssi_updates = True
     plugin.rssi_update_threshold = 5
