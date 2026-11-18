@@ -4,12 +4,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 from collections.abc import AsyncIterator, Mapping
 from importlib.util import find_spec
 
 from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, Endpoint, Service
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _default_route_ipv4() -> str:
+    """Find the IPv4 source address selected by the OS default route.
+
+    UDP connect() performs route selection without sending a datagram.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.connect(("1.1.1.1", 9))
+        address = sock.getsockname()[0]
+    if address == "0.0.0.0":
+        raise OSError("Unable to determine the default-route IPv4 address")
+    return address
 
 
 class SSDPPlugin:
@@ -49,6 +63,8 @@ class SSDPPlugin:
         from async_upnp_client.search import async_search
 
         while self._running:
+            source_ip = _default_route_ipv4()
+            _LOGGER.debug("SSDP search using default-route IPv4 %s", source_ip)
             _LOGGER.debug(
                 "Starting SSDP search: target=%s timeout=%ss",
                 self.search_target,
@@ -89,6 +105,7 @@ class SSDPPlugin:
 
             await async_search(
                 async_callback=on_response,
+                source=(source_ip, 0),
                 timeout=self.search_timeout,
                 search_target=self.search_target,
             )
