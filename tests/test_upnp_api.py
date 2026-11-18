@@ -41,7 +41,7 @@ async def test_http_inspection_end_to_end_and_error_isolation():
     device = parse_description(xml, "http://192.168.15.9:9110/ip_control")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         with patch(
-            "snf.api.router.UPnPInspector.inspect_observation",
+            "snf.runtime.UPnPInspector.inspect_observation",
             new_callable=AsyncMock,
             return_value=device,
         ) as mocked:
@@ -66,7 +66,7 @@ async def test_http_inspection_end_to_end_and_error_isolation():
                 "raw_response": None,
             },
         }
-        with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
+        with patch("snf.runtime.UPnPInspector.inspect_observation", new_callable=AsyncMock,
                    side_effect=UPnPInspectionError("invalid description")):
             failure = await client.get(
                 "/network/discoveries/inspect/upnp",
@@ -109,7 +109,7 @@ async def test_plain_text_response_error_contains_raw_evidence():
         code="UNSUPPORTED_DESCRIPTION_FORMAT", raw_response="status=ok",
     )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
+        with patch("snf.runtime.UPnPInspector.inspect_observation", new_callable=AsyncMock,
                    side_effect=failure):
             response = await client.get(
                 "/network/discoveries/inspect/upnp", params={"identifier": observation.identifier}
@@ -147,7 +147,7 @@ async def test_failure_uses_only_semantically_valid_ssdp_metadata():
     app = FastAPI()
     app.include_router(create_router(SnapshotRuntime([observation])), prefix="/network")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        with patch("snf.api.router.UPnPInspector.inspect_observation", new_callable=AsyncMock,
+        with patch("snf.runtime.UPnPInspector.inspect_observation", new_callable=AsyncMock,
                    side_effect=UPnPInspectionError("bad description")):
             response = await client.get(
                 "/network/discoveries/inspect/upnp", params={"identifier": observation.identifier}
@@ -170,7 +170,7 @@ async def test_malformed_xml_returns_422_with_identity_fallback():
     app.include_router(create_router(SnapshotRuntime([observation])), prefix="/network")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         with patch(
-            "snf.api.router.UPnPInspector.inspect_observation",
+            "snf.runtime.UPnPInspector.inspect_observation",
             new_callable=AsyncMock,
             side_effect=UPnPInspectionError(
                 "Malformed UPnP description XML", code="MALFORMED_DESCRIPTION"
