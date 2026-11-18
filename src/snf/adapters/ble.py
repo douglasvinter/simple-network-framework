@@ -185,8 +185,22 @@ class BLEPlugin:
         pending = self._pending.get(key)
         if pending is None:
             if len(self._pending) >= self.max_pending_devices:
-                _LOGGER.warning("BLE pending event capacity reached; dropping event for %s", key)
-                return
+                if event.state is DiscoveryState.REMOVED:
+                    # Removal must not be silently lost; evict an older pending update.
+                    victim = next(
+                        (address for address, events in self._pending.items()
+                         if events[-1].state is not DiscoveryState.REMOVED),
+                        None,
+                    )
+                    if victim is not None:
+                        del self._pending[victim]
+                        _LOGGER.warning("BLE event capacity reached; displaced update for %s", victim)
+                    else:
+                        _LOGGER.warning("BLE event capacity reached; dropping removal for %s", key)
+                        return
+                else:
+                    _LOGGER.warning("BLE pending event capacity reached; dropping event for %s", key)
+                    return
             self._pending[key] = [event]
             self._events.put_nowait(key)
             return
@@ -207,8 +221,15 @@ class BLEPlugin:
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
             return
+        key = str(device.address)
+        if (
+            key not in self._last_seen
+            and key not in self._pending
+            and len(self._pending) >= self.max_pending_devices
+        ):
+            _LOGGER.warning("BLE pending event capacity reached; ignoring new device %s", key)
+            return
         current = self._to_device(device, advertisement_data)
-        key = current.identifier
         self._last_seen[key] = asyncio.get_running_loop().time()
         previous = self._last_emitted.get(key)
         record = self._reconcile(previous, current)
