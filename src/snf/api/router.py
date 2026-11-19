@@ -22,10 +22,10 @@ from snf.api.schemas import (
     UPnPDeviceResponse,
 )
 from snf.entities import NetworkEntity
-from snf.inspection.ble import BLEInspectionError, BLEInspector
-from snf.inspection.mdns import MDNSInspectionError, MDNSInspector
+from snf.inspection.ble import BLEInspectionError
+from snf.inspection.mdns import MDNSInspectionError
 from snf.inspection.ssdp_metadata import SSDPMetadataParser
-from snf.inspection.upnp import UPnPInspectionError, UPnPInspector
+from snf.inspection.upnp import UPnPInspectionError
 from snf.models import DiscoveryObservation
 from snf.runtime import NetworkRuntime
 
@@ -129,14 +129,14 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except ValueError as exc:
             return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
-            observations = runtime.snapshot(protocol="ssdp")
+            runtime.snapshot(protocol="ssdp")
         except RuntimeError as exc:
             return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
-        observation = next((item for item in observations if item.identifier == identifier), None)
+        observation = runtime.get("ssdp", identifier)
         if observation is None:
             return failure(404, "OBSERVATION_NOT_FOUND", "SSDP observation not found")
         try:
-            device = await UPnPInspector().inspect_observation(observation)
+            device = await runtime.inspect("ssdp", identifier)
             return InspectionSuccessResponse.model_validate({
                 **UPnPDeviceResponse.model_validate(device).model_dump(),
                 "error": {},
@@ -174,16 +174,14 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except ValueError as exc:
             return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
-            observations = runtime.snapshot(protocol="mdns")
+            runtime.snapshot(protocol="mdns")
         except RuntimeError as exc:
             return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
-        observation = next(
-            (item for item in observations if item.identifier == identifier), None
-        )
+        observation = runtime.get("mdns", identifier)
         if observation is None:
             return failure(404, "OBSERVATION_NOT_FOUND", "mDNS observation not found")
         try:
-            details = await MDNSInspector().inspect_observation(observation)
+            details = await runtime.inspect("mdns", identifier)
         except MDNSInspectionError as exc:
             status = 422 if exc.code == "INVALID_OBSERVATION" else 502
             return failure(status, exc.code, str(exc))
@@ -223,16 +221,14 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except ValueError as exc:
             return failure(422, "UNSUPPORTED_PROTOCOL", str(exc))
         try:
-            observations = runtime.snapshot(protocol="ble")
+            runtime.snapshot(protocol="ble")
         except RuntimeError as exc:
             return failure(503, "RUNTIME_UNAVAILABLE", str(exc))
-        observation = next(
-            (item for item in observations if item.identifier == identifier), None
-        )
+        observation = runtime.get("ble", identifier)
         if observation is None:
             return failure(404, "OBSERVATION_NOT_FOUND", "BLE observation not found")
         try:
-            details = await BLEInspector().inspect_observation(observation)
+            details = await runtime.inspect("ble", identifier)
         except BLEInspectionError as exc:
             status = 422 if exc.code == "INVALID_OBSERVATION" else 502
             return failure(status, exc.code, str(exc))

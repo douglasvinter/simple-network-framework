@@ -183,19 +183,25 @@ async def test_http_rejects_oversized_chunked_body():
 
 @pytest.mark.asyncio
 async def test_http_timeout_does_not_block_discovery():
+    release_handler = asyncio.Event()
+
     async def handler(reader, writer):
         await reader.read(4096)
-        await asyncio.sleep(0.2)
-        writer.close()
-        await writer.wait_closed()
+        try:
+            await release_handler.wait()
+        finally:
+            writer.close()
+            await writer.wait_closed()
 
     server = await asyncio.start_server(handler, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     try:
         with patch("snf.inspection.upnp._local_address", return_value=True):
             with pytest.raises(UPnPInspectionError, match="fetch failed"):
-                await UPnPInspector(timeout=0.03).inspect(f"http://127.0.0.1:{port}/desc")
+                # Override the production timeout only for this controlled test.
+                await UPnPInspector(timeout=0.02).inspect(f"http://127.0.0.1:{port}/desc")
     finally:
+        release_handler.set()
         server.close()
         await server.wait_closed()
 

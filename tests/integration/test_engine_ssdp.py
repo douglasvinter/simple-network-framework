@@ -43,7 +43,7 @@ async def test_real_ssdp_adapter_and_engine_with_mocked_network_boundary(monkeyp
     # Bypass optional-package detection: the protocol boundary is replaced above.
     plugin = SSDPPlugin.__new__(SSDPPlugin)
     plugin.search_target = "ssdp:all"
-    plugin.search_interval = 30.0
+    plugin.search_interval = 0.01
     plugin.search_timeout = 2
     plugin._running = False
     plugin._stop_event = asyncio.Event()
@@ -89,7 +89,7 @@ async def test_ssdp_preserves_distinct_service_advertisements_with_shared_udn(mo
 
     plugin = SSDPPlugin.__new__(SSDPPlugin)
     plugin.search_target = "ssdp:all"
-    plugin.search_interval = 30.0
+    plugin.search_interval = 0.01
     plugin.search_timeout = 2
     plugin._running = False
     plugin._stop_event = asyncio.Event()

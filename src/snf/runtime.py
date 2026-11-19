@@ -6,9 +6,12 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterable
 from contextlib import suppress
-from typing import Self
+from typing import Literal, Self, overload
 
 from snf.engine import DiscoveryEngine
+from snf.inspection.ble import BLEDeviceDetails, BLEInspector
+from snf.inspection.mdns import MDNSInspector, MDNSServiceDetails
+from snf.inspection.upnp import UPnPDevice, UPnPInspector
 from snf.entities import EntityResolver, NetworkEntity
 from snf.models import DiscoveryEvent, DiscoveryObservation
 from snf.plugins import DiscoveryPlugin, create_plugins
@@ -16,6 +19,16 @@ from snf.storage import InMemoryStorage, ObservationStorage
 
 _LOGGER = logging.getLogger(__name__)
 _CLOSED = object()
+
+
+class InspectionLookupError(ValueError):
+    """An inspection target cannot be resolved from current runtime observations."""
+
+    def __init__(self, message: str, *, code: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 
 
 class DiscoverySubscription:
@@ -94,6 +107,60 @@ class NetworkRuntime:
         if self._engine is None:
             raise RuntimeError("Discovery has not started")
         return self._engine.snapshot(protocol=protocol)
+
+    def get(self, protocol: str, identifier: str) -> DiscoveryObservation | None:
+        """Find one live protocol-scoped observation without network I/O."""
+        self.validate_protocol(protocol)
+        return next(
+            (item for item in self.snapshot(protocol=protocol) if item.identifier == identifier),
+            None,
+        )
+
+    @overload
+    async def inspect(self, protocol: Literal["ble"], identifier: str) -> BLEDeviceDetails: ...
+
+    @overload
+    async def inspect(self, protocol: Literal["mdns"], identifier: str) -> MDNSServiceDetails: ...
+
+    @overload
+    async def inspect(self, protocol: Literal["ssdp"], identifier: str) -> UPnPDevice: ...
+
+    @overload
+    async def inspect(
+        self, protocol: str, identifier: str
+    ) -> BLEDeviceDetails | MDNSServiceDetails | UPnPDevice: ...
+
+    async def inspect(
+        self, protocol: str, identifier: str
+    ) -> BLEDeviceDetails | MDNSServiceDetails | UPnPDevice:
+        """Inspect a live observation on demand without mutating discovery state.
+
+        This method performs protocol-specific network I/O. It does not lock,
+        serialize, cache, or retry concurrent inspections of the same target.
+        Consumers must coordinate inspections when their devices require it.
+        """
+        if not identifier or not identifier.strip():
+            raise InspectionLookupError(
+                f"An inspection identifier is required for {protocol}",
+                code="INVALID_IDENTIFIER",
+            )
+        self.validate_protocol(protocol)
+        if protocol not in ("ssdp", "mdns", "ble"):
+            raise InspectionLookupError(
+                f"Inspection is not supported for protocol {protocol!r}",
+                code="UNSUPPORTED_PROTOCOL",
+            )
+        observation = self.get(protocol, identifier)
+        if observation is None:
+            raise InspectionLookupError(
+                f"{protocol.upper()} observation not found",
+                code="OBSERVATION_NOT_FOUND",
+            )
+        if protocol == "ssdp":
+            return await UPnPInspector().inspect_observation(observation)
+        if protocol == "mdns":
+            return await MDNSInspector().inspect_observation(observation)
+        return await BLEInspector().inspect_observation(observation)
 
     def entities(self, *, protocol: str | None = None) -> tuple[NetworkEntity, ...]:
         return EntityResolver().resolve(self.snapshot(protocol=protocol))
