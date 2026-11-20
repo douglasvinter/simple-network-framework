@@ -35,6 +35,28 @@ def _decode_properties(properties: dict[Any, Any]) -> dict[str, str]:
     }
 
 
+def _observation_from_service_info(
+    service_type: str, name: str, info: Any, addresses: list[str]
+) -> DiscoveryObservation:
+    """Project resolved DNS-SD records without owning resolution or event emission."""
+    identifier = f"{service_type}|{name}"
+    properties = _decode_properties(info.properties)
+    endpoints = tuple(Endpoint("ip", address, info.port) for address in addresses)
+    service = Service(
+        name=name,
+        service_type=service_type,
+        endpoints=endpoints,
+        metadata={"server": info.server, "properties": properties},
+    )
+    return DiscoveryObservation(
+        protocol=self.name,
+        identifier=identifier,
+        name=name,
+        endpoints=endpoints,
+        services=(service,),
+        metadata={"server": info.server, "properties": properties},
+    )
+
 class MDNSPlugin:
     """Browse and resolve DNS-SD service instances."""
 
@@ -115,22 +137,7 @@ class MDNSPlugin:
         if not addresses:
             return
 
-        properties = _decode_properties(info.properties)
-        endpoints = tuple(Endpoint("ip", address, info.port) for address in addresses)
-        service = Service(
-            name=name,
-            service_type=service_type,
-            endpoints=endpoints,
-            metadata={"server": info.server, "properties": properties},
-        )
-        device = DiscoveryObservation(
-            protocol=self.name,
-            identifier=identifier,
-            name=name,
-            endpoints=endpoints,
-            services=(service,),
-            metadata={"server": info.server, "properties": properties},
-        )
+        device = _observation_from_service_info(service_type, name, info, addresses)
         await self._events.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
