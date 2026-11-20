@@ -25,14 +25,24 @@ ALL_MDSNS_SERVICE_TYPES = DEFAULT_SERVICE_TYPES
 
 def _decode_properties(properties: dict[Any, Any]) -> dict[str, str]:
     """Normalize DNS-SD TXT properties using the existing replacement policy."""
-    return {
-        (key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)): (
-            value.decode("utf-8", errors="replace")
-            if isinstance(value, bytes)
-            else ("" if value is None else str(value))
+    decoded: dict[str, str] = {}
+
+    for key, value in properties.items():
+        decoded_key = (
+            key.decode("utf-8", errors="replace")
+            if isinstance(key, bytes)
+            else str(key)
         )
-        for key, value in properties.items()
-    }
+        if isinstance(value, bytes):
+            decoded_value = value.decode("utf-8", errors="replace")
+        elif value is None:
+            decoded_value = ""
+        else:
+            decoded_value = str(value)
+
+        decoded[decoded_key] = decoded_value
+
+    return decoded
 
 
 def _observation_from_service_info(
@@ -48,7 +58,7 @@ def _observation_from_service_info(
         endpoints=endpoints,
         metadata={"server": info.server, "properties": properties},
     )
-    return DiscoveryObservation(
+    observation = DiscoveryObservation(
         protocol=protocol,
         identifier=identifier,
         name=name,
@@ -56,6 +66,8 @@ def _observation_from_service_info(
         services=(service,),
         metadata={"server": info.server, "properties": properties},
     )
+    return observation
+
 
 class MDNSPlugin:
     """Browse and resolve DNS-SD service instances."""
