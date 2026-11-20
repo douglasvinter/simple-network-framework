@@ -1,4 +1,4 @@
-"""Bluetooth Low Energy discovery backed by Bleak."""
+"""Discover BLE advertisements and publish normalized device lifecycle events."""
 
 from __future__ import annotations
 
@@ -22,7 +22,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class BLEPlugin:
-    """Discover BLE peripherals from advertisements without pairing or connecting."""
+    """Scan BLE advertisements without pairing or connecting to peripherals.
+
+    Reconcile partial advertisements and coalesce updates per device while
+    preserving removal and rediscovery transitions.
+    """
 
     name = "ble"
 
@@ -35,6 +39,19 @@ class BLEPlugin:
         rssi_update_threshold: int = 5,
         emit_rssi_updates: bool = False,
     ) -> None:
+        """Configure BLE scanning, expiry, and optional RSSI update reporting.
+
+        Args:
+            service_uuids: Optional service UUID filter passed to Bleak.
+            scanning_mode: Active or passive scanning mode.
+            device_timeout: Seconds without an advertisement before removal.
+            rssi_update_threshold: Minimum absolute RSSI delta to report.
+            emit_rssi_updates: Whether RSSI-only changes can emit updates.
+
+        Raises:
+            ValueError: If timeout or RSSI threshold is not positive.
+            ImportError: If the optional Bleak dependency is unavailable.
+        """
         if device_timeout <= 0:
             raise ValueError("device_timeout must be positive")
         if rssi_update_threshold < 1:
@@ -50,8 +67,11 @@ class BLEPlugin:
         self.emit_rssi_updates = emit_rssi_updates
         self._scanner: Any = None
         self._events: asyncio.Queue[str | None] = asyncio.Queue()
+        # Each device has a short sequence of coalesced state transitions.
+        # The last event is the latest transition, not necessarily the only one.
         self._pending: dict[str, list[DiscoveryEvent]] = {}
         self._last_seen: dict[str, float] = {}
+        # Latest reconciled observation, including updates suppressed by policy.
         self._last_emitted: dict[str, DiscoveryObservation] = {}
         self._delivered_rssi: dict[str, int] = {}
         self._expiry_task: asyncio.Task[None] | None = None
@@ -59,6 +79,7 @@ class BLEPlugin:
 
     @staticmethod
     def _encode_manufacturer_data(values: dict[int, bytes]) -> dict[str, str]:
+        """Encode manufacturer identifiers and payloads for JSON-friendly metadata."""
         encoded: dict[str, str] = {}
         for company_id, value in values.items():
             encoded[str(company_id)] = bytes(value).hex()
@@ -66,6 +87,7 @@ class BLEPlugin:
 
     @staticmethod
     def _encode_service_data(values: dict[str, bytes]) -> dict[str, str]:
+        """Encode advertised service payload bytes as hexadecimal strings."""
         encoded: dict[str, str] = {}
         for uuid, value in values.items():
             encoded[str(uuid)] = bytes(value).hex()
@@ -73,6 +95,7 @@ class BLEPlugin:
 
     @staticmethod
     def _company_names(manufacturer_data: dict[str, str]) -> dict[str, str]:
+        """Resolve known Bluetooth company IDs without discarding unknown IDs."""
         names: dict[str, str] = {}
         for company_id in manufacturer_data:
             resolved_name = company_name(int(company_id))
@@ -82,6 +105,7 @@ class BLEPlugin:
 
     @staticmethod
     def _service_names(uuids: tuple[str, ...]) -> dict[str, str]:
+        """Resolve assigned service names for advertised UUIDs."""
         names: dict[str, str] = {}
         for uuid in uuids:
             details = uuid_details(uuid, kind="service")
@@ -91,6 +115,7 @@ class BLEPlugin:
 
     @staticmethod
     def _advertised_services(uuids: tuple[str, ...]) -> tuple[Service, ...]:
+        """Create discovery services for the advertised UUIDs in order."""
         services: list[Service] = []
         for uuid in uuids:
             services.append(
@@ -100,7 +125,11 @@ class BLEPlugin:
 
     @staticmethod
     def _enrich_metadata(metadata: dict[str, Any]) -> None:
-        """Rebuild fields derived from the normalized advertisement evidence."""
+        """Refresh identification and assigned names after normalization or merging.
+
+        Mutates metadata in place; raw manufacturer and service payloads are
+        already encoded as hexadecimal strings.
+        """
         manufacturer_data = cast(dict[str, str], metadata["manufacturer_data"])
         service_data = cast(dict[str, str], metadata["service_data"])
         service_uuids = cast(tuple[str, ...], metadata["service_uuids"])
@@ -119,7 +148,11 @@ class BLEPlugin:
 
     @staticmethod
     def _to_device(device: _Addressable, advertisement_data: object) -> DiscoveryObservation:
-        """Normalize a BLE advertisement into a discovery observation."""
+        """Convert Bleak device and advertisement fields into a discovery observation.
+
+        Optional advertisement attributes are read defensively because the
+        scanner callback may provide incomplete advertisement information.
+        """
         address = str(device.address)
         advertised_name = getattr(advertisement_data, "local_name", None)
         name = advertised_name or getattr(device, "name", None) or address
@@ -151,7 +184,12 @@ class BLEPlugin:
         previous: DiscoveryObservation | None,
         current: DiscoveryObservation,
     ) -> DiscoveryObservation:
-        """Preserve previously observed evidence absent from partial advertisements."""
+        """Merge partial advertisements without losing previously observed evidence.
+
+        Scalar fields retain their previous value when absent. Payload maps
+        prefer current values for matching keys; service UUIDs preserve their
+        first-seen order. Derived metadata is rebuilt after the merge.
+        """
         if previous is None:
             return current
 
@@ -169,6 +207,7 @@ class BLEPlugin:
 
         old_uuids = cast(tuple[str, ...], old["service_uuids"])
         current_uuids = cast(tuple[str, ...], new["service_uuids"])
+        # Dictionary keys deduplicate UUIDs while retaining first-seen order.
         service_uuids = tuple(dict.fromkeys((*old_uuids, *current_uuids)))
         new["service_uuids"] = service_uuids
         BLEPlugin._enrich_metadata(new)
@@ -186,7 +225,11 @@ class BLEPlugin:
         )
 
     def _enqueue(self, event: DiscoveryEvent) -> None:
-        """Coalesce observations without losing removal/rediscovery transitions."""
+        """Queue the latest event while preserving removal/rediscovery boundaries.
+
+        Consecutive events in the same state replace the final pending event;
+        a state transition is appended so consumers can observe both states.
+        """
         key = event.observation.identifier
         pending = self._pending.get(key)
         if pending is None:
@@ -220,7 +263,11 @@ class BLEPlugin:
         )
 
     def _baseline_rssi(self, key: str) -> int | None:
-        """Compare pending RSSI first, otherwise the last delivered RSSI."""
+        """Use the latest pending RSSI, or fall back to the last delivered RSSI.
+
+        Pending events take precedence because the consumer may not have
+        received the most recently queued observation yet.
+        """
         pending = self._pending.get(key)
 
         if pending and pending[-1].state is not DiscoveryState.REMOVED:
@@ -231,7 +278,7 @@ class BLEPlugin:
         return rssi if isinstance(rssi, int) else None
 
     def _is_rssi_change_significant(self, key: str, new_rssi: object) -> bool:
-        """Apply the configured minimum RSSI change against the event baseline."""
+        """Report whether an RSSI-only update meets the configured absolute delta."""
         if not self.emit_rssi_updates or not isinstance(new_rssi, int):
             return False
 
@@ -251,6 +298,7 @@ class BLEPlugin:
         return self._is_rssi_change_significant(key, record.metadata.get("rssi"))
 
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
+        """Reconcile a scanner callback and queue only reportable observations."""
         if not self._running:
             return
         key = str(device.address)
@@ -267,6 +315,7 @@ class BLEPlugin:
         self._enqueue(DiscoveryEvent(DiscoveryState.ADDED, record))
 
     async def start(self) -> None:
+        """Start scanning and schedule stale-device expiry checks."""
         from bleak import BleakScanner
 
         self._running = True
@@ -292,6 +341,7 @@ class BLEPlugin:
         _LOGGER.debug("BLE scanning started")
 
     async def _expire_stale_devices(self) -> None:
+        """Publish removal events when devices exceed the inactivity timeout."""
         interval = min(self.device_timeout / 2, 5.0)
         while self._running:
             await asyncio.sleep(interval)
@@ -309,6 +359,7 @@ class BLEPlugin:
                 self._enqueue(DiscoveryEvent(DiscoveryState.REMOVED, device))
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
+        """Yield coalesced discovery events until scanning stops."""
         if not self._running:
             raise RuntimeError("BLEPlugin.start() must be called before discover()")
         while self._running:
@@ -325,6 +376,7 @@ class BLEPlugin:
                 yield event
 
     async def stop(self) -> None:
+        """Stop scanning, wake consumers, and cancel the expiry task."""
         self._running = False
         self._events.put_nowait(None)
         if self._expiry_task is not None:
