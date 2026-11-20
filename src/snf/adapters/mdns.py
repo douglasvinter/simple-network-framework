@@ -36,7 +36,7 @@ def _decode_properties(properties: dict[Any, Any]) -> dict[str, str]:
 
 
 def _observation_from_service_info(
-    service_type: str, name: str, info: Any, addresses: list[str]
+    service_type: str, name: str, info: Any, addresses: list[str], *, protocol: str = "mdns"
 ) -> DiscoveryObservation:
     """Project resolved DNS-SD records without owning resolution or event emission."""
     identifier = f"{service_type}|{name}"
@@ -49,7 +49,7 @@ def _observation_from_service_info(
         metadata={"server": info.server, "properties": properties},
     )
     return DiscoveryObservation(
-        protocol=self.name,
+        protocol=protocol,
         identifier=identifier,
         name=name,
         endpoints=endpoints,
@@ -137,7 +137,9 @@ class MDNSPlugin:
         if not addresses:
             return
 
-        device = _observation_from_service_info(service_type, name, info, addresses)
+        device = _observation_from_service_info(
+            service_type, name, info, addresses, protocol=self.name
+        )
         await self._events.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
