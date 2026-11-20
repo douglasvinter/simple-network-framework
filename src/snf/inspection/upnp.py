@@ -21,8 +21,8 @@ from snf.inspection.constants import (
     MAX_TCP_PORT,
     SSDP_PROTOCOL,
 )
-from snf.inspection.xml import child_text, children, local_name
 from snf.inspection.error_codes import InspectionErrorCode
+from snf.inspection.xml import child_text, children, local_name
 from snf.models import DiscoveryObservation
 
 
