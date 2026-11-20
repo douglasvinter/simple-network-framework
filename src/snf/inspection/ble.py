@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bleak.backends.service import BleakGATTService
 
 from snf.bluetooth.assigned_numbers import uuid_details
 from snf.inspection.error_codes import InspectionErrorCode
@@ -50,27 +53,36 @@ class BLEDeviceDetails:
     services: tuple[BLEServiceDetails, ...]
 
 
-def _service_details(service: object) -> BLEServiceDetails:
-    """Project one Bleak service into immutable metadata without GATT reads."""
-    item: Any = service
+def _service_details(service: BleakGATTService) -> BLEServiceDetails:
+    """Project Bleak GATT metadata without reading characteristic values."""
+    service_uuid = str(service.uuid)
+    service_name = _assigned_name(service_uuid, "service")
+    characteristics: list[BLECharacteristicDetails] = []
+
+    for characteristic in service.characteristics:
+        characteristic_uuid = str(characteristic.uuid)
+        characteristic_name = _assigned_name(characteristic_uuid, "characteristic")
+        descriptors: list[str] = []
+        descriptor_names: list[str | None] = []
+
+        for descriptor in characteristic.descriptors:
+            descriptor_uuid = str(descriptor.uuid)
+            descriptors.append(descriptor_uuid)
+            descriptor_names.append(_assigned_name(descriptor_uuid, "descriptor"))
+
+        details = BLECharacteristicDetails(
+            uuid=characteristic_uuid,
+            properties=tuple(characteristic.properties),
+            name=characteristic_name,
+            descriptors=tuple(descriptors),
+            descriptor_names=tuple(descriptor_names),
+        )
+        characteristics.append(details)
+
     return BLEServiceDetails(
-        uuid=str(item.uuid),
-        name=_assigned_name(str(item.uuid), "service"),
-        characteristics=tuple(
-            BLECharacteristicDetails(
-                uuid=str(characteristic.uuid),
-                properties=tuple(characteristic.properties),
-                name=_assigned_name(str(characteristic.uuid), "characteristic"),
-                descriptors=tuple(
-                    str(descriptor.uuid) for descriptor in characteristic.descriptors
-                ),
-                descriptor_names=tuple(
-                    _assigned_name(str(descriptor.uuid), "descriptor")
-                    for descriptor in characteristic.descriptors
-                ),
-            )
-            for characteristic in item.characteristics
-        ),
+        uuid=service_uuid,
+        name=service_name,
+        characteristics=tuple(characteristics),
     )
 
 
@@ -99,7 +111,9 @@ class BLEInspector:
 
         try:
             async with BleakClient(observation.identifier) as client:
-                services = tuple(_service_details(service) for service in client.services)
+                services = tuple(
+                    _service_details(service) for service in client.services
+                )
         except (BleakError, OSError, TimeoutError) as exc:
             _LOGGER.exception("BLE GATT inspection failed for %s", observation.identifier)
             raise BLEInspectionError(
