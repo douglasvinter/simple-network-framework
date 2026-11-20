@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterable
 from contextlib import suppress
-from typing import Literal, Self, overload
+from typing import Literal, Self, cast, overload
 
 from snf.engine import DiscoveryEngine
 from snf.inspection.ble import BLEDeviceDetails, BLEInspector
@@ -28,8 +28,6 @@ class InspectionLookupError(ValueError):
     def __init__(self, message: str, *, code: str) -> None:
         super().__init__(message)
         self.code = code
-
-
 
 
 class DiscoverySubscription:
@@ -60,8 +58,7 @@ class DiscoverySubscription:
                 event = await self._queue.get()
                 if event is _CLOSED:
                     return
-                assert isinstance(event, DiscoveryEvent)
-                yield event
+                yield cast(DiscoveryEvent, event)
         finally:
             self.close()
 
