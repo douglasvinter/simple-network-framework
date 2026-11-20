@@ -11,14 +11,14 @@ def test_decode_properties_preserves_utf8_and_string_conversion():
         b"name": "Café".encode(),
         "empty": None,
         12: 34,
-        b"binary": b"\\xff",
+        b"binary": bytes([255]),
     }
 
     assert _decode_properties(properties) == {
         "name": "Café",
         "empty": "",
         "12": "34",
-        "binary": "\\ufffd",
+        "binary": chr(0xFFFD),
     }
 
 
