@@ -297,7 +297,7 @@ class UPnPInspector:
                     infos = await asyncio.get_running_loop().getaddrinfo(
                         host, port, type=socket.SOCK_STREAM)
                     _validate_resolved_addresses(
-                        {item[4][0] for item in infos}, expected_addresses
+                        {str(item[4][0]) for item in infos}, expected_addresses
                     )
                     connector = aiohttp.TCPConnector(
                         resolver=_PinnedResolver(infos), use_dns_cache=False
@@ -318,15 +318,42 @@ class UPnPInspector:
                 ) from exc
 
 
-class _PinnedResolver:
+class _PinnedResolver(aiohttp.abc.AbstractResolver):
     """Supply only prevalidated DNS answers to aiohttp's connector."""
 
-    def __init__(self, infos: list[tuple]) -> None:
+    def __init__(
+        self,
+        infos: list[
+            tuple[
+                socket.AddressFamily,
+                socket.SocketKind,
+                int,
+                str,
+                tuple[str, int] | tuple[str, int, int, int],
+            ]
+        ],
+    ) -> None:
         self._infos = infos
 
-    async def resolve(self, host: str, port: int, family: int = 0) -> list[dict]:
-        return [dict(host=item[4][0], hostname=host, port=port, family=item[0],
-                     proto=item[2], flags=0) for item in self._infos]
+    async def resolve(
+        self,
+        host: str,
+        port: int = 0,
+        family: socket.AddressFamily = socket.AF_INET,
+    ) -> list[aiohttp.abc.ResolveResult]:
+        results: list[aiohttp.abc.ResolveResult] = []
+        for item in self._infos:
+            results.append(
+                {
+                    "host": str(item[4][0]),
+                    "hostname": host,
+                    "port": port,
+                    "family": item[0],
+                    "proto": item[2],
+                    "flags": 0,
+                }
+            )
+        return results
 
     async def close(self) -> None:
         pass
