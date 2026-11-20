@@ -140,19 +140,19 @@ class NetworkRuntime:
         if not identifier or not identifier.strip():
             raise InspectionLookupError(
                 f"An inspection identifier is required for {protocol}",
-                code=InspectionErrorCode.INVALID_IDENTIFIER,
+                code=InspectionErrorCode.INVALID_IDENTIFIER.get_code(),
             )
         self.validate_protocol(protocol)
         if protocol not in ("ssdp", "mdns", "ble"):
             raise InspectionLookupError(
                 f"Inspection is not supported for protocol {protocol!r}",
-                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL,
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code(),
             )
         observation = self.get(protocol, identifier)
         if observation is None:
             raise InspectionLookupError(
                 f"{protocol.upper()} observation not found",
-                code=InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                code=InspectionErrorCode.OBSERVATION_NOT_FOUND.get_code(),
             )
         if protocol == "ssdp":
             return await UPnPInspector().inspect_observation(observation)
