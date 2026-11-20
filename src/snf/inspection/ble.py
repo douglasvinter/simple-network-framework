@@ -6,12 +6,12 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from bleak.backends.service import BleakGATTService
-
 from snf.bluetooth.assigned_numbers import uuid_details
 from snf.inspection.error_codes import InspectionErrorCode
 from snf.models import DiscoveryObservation
+
+if TYPE_CHECKING:
+    from bleak.backends.service import BleakGATTService
 
 _LOGGER = logging.getLogger(__name__)
 
