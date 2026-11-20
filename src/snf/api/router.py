@@ -101,21 +101,21 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
 
         if identifier is None or not identifier.strip():
             return upnp_failure(
-                422, InspectionErrorCode.INVALID_IDENTIFIER,
+                422, InspectionErrorCode.INVALID_IDENTIFIER.get_code(),
                 "An SSDP identifier is required"
             )
         try:
             runtime.validate_protocol("ssdp")
         except ValueError as exc:
-            return upnp_failure(422, InspectionErrorCode.UNSUPPORTED_PROTOCOL, str(exc))
+            return upnp_failure(422, InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code(), str(exc))
         try:
             runtime.snapshot(protocol="ssdp")
         except RuntimeError as exc:
-            return upnp_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE, str(exc))
+            return upnp_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE.get_code(), str(exc))
         observation = runtime.get("ssdp", identifier)
         if observation is None:
             return upnp_failure(
-                404, InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                404, InspectionErrorCode.OBSERVATION_NOT_FOUND.get_code(),
                 "SSDP observation not found"
             )
         try:
@@ -145,21 +145,21 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
 
         if identifier is None or not identifier.strip():
             return mdns_failure(
-                422, InspectionErrorCode.INVALID_IDENTIFIER,
+                422, InspectionErrorCode.INVALID_IDENTIFIER.get_code(),
                 "An mDNS identifier is required"
             )
         try:
             runtime.validate_protocol("mdns")
         except ValueError as exc:
-            return mdns_failure(422, InspectionErrorCode.UNSUPPORTED_PROTOCOL, str(exc))
+            return mdns_failure(422, InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code(), str(exc))
         try:
             runtime.snapshot(protocol="mdns")
         except RuntimeError as exc:
-            return mdns_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE, str(exc))
+            return mdns_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE.get_code(), str(exc))
         observation = runtime.get("mdns", identifier)
         if observation is None:
             return mdns_failure(
-                404, InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                404, InspectionErrorCode.OBSERVATION_NOT_FOUND.get_code(),
                 "mDNS observation not found"
             )
         try:
@@ -184,21 +184,21 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
 
         if identifier is None or not identifier.strip():
             return ble_failure(
-                422, InspectionErrorCode.INVALID_IDENTIFIER,
+                422, InspectionErrorCode.INVALID_IDENTIFIER.get_code(),
                 "A BLE identifier is required"
             )
         try:
             runtime.validate_protocol("ble")
         except ValueError as exc:
-            return ble_failure(422, InspectionErrorCode.UNSUPPORTED_PROTOCOL, str(exc))
+            return ble_failure(422, InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code(), str(exc))
         try:
             runtime.snapshot(protocol="ble")
         except RuntimeError as exc:
-            return ble_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE, str(exc))
+            return ble_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE.get_code(), str(exc))
         observation = runtime.get("ble", identifier)
         if observation is None:
             return ble_failure(
-                404, InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                404, InspectionErrorCode.OBSERVATION_NOT_FOUND.get_code(),
                 "BLE observation not found"
             )
         try:
