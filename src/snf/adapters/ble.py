@@ -87,9 +87,9 @@ class BLEPlugin:
         )
         company_names: dict[str, str] = {}
         for key in manufacturer_data:
-            name = company_name(int(key))
-            if name is not None:
-                company_names[key] = name
+            resolved_name = company_name(int(key))
+            if resolved_name is not None:
+                company_names[key] = resolved_name
 
         service_names: dict[str, str] = {}
         for uuid in service_uuids:
