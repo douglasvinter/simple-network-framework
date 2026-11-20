@@ -115,18 +115,21 @@ def parse_description(
                 raw_response=xml.decode("utf-8", errors="replace"),
             ) from exc
         raise UPnPInspectionError(
-            "Malformed UPnP description XML", code=InspectionErrorCode.MALFORMED_DESCRIPTION.get_code(),
+            "Malformed UPnP description XML",
+            code=InspectionErrorCode.MALFORMED_DESCRIPTION.get_code(),
             raw_response=xml.decode("utf-8", errors="replace"),
         ) from exc
     if local_name(root.tag) != "root":
         raise UPnPInspectionError(
-            "Not a UPnP root description", code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
+            "Not a UPnP root description",
+            code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
             raw_response=xml.decode("utf-8", errors="replace"),
         )
     device = next(iter(children(root, "device")), None)
     if device is None:
         raise UPnPInspectionError(
-            "Missing UPnP root device", code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
+            "Missing UPnP root device",
+            code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
             raw_response=xml.decode("utf-8", errors="replace"),
         )
     return _device(device, location, 0, max_depth)
@@ -305,7 +308,8 @@ class UPnPInspector:
                             return parse_description(content, location, max_depth=self.max_depth)
             except (TimeoutError, OSError, aiohttp.ClientError) as exc:
                 raise UPnPInspectionError(
-                    "UPnP description fetch failed", code=InspectionErrorCode.FETCH_FAILED.get_code()
+                    "UPnP description fetch failed",
+                    code=InspectionErrorCode.FETCH_FAILED.get_code()
                 ) from exc
 
 
