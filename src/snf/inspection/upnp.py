@@ -21,6 +21,7 @@ from snf.inspection.constants import (
     MAX_TCP_PORT,
     SSDP_PROTOCOL,
 )
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.inspection.xml import child_text, children, local_name
 from snf.models import DiscoveryObservation
 
@@ -29,7 +30,7 @@ class UPnPInspectionError(ValueError):
     """Failed inspection with a stable code and optional bounded response."""
 
     def __init__(
-        self, message: str, *, code: str = "INSPECTION_FAILED",
+        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED.get_code(),
         raw_response: str | None = None,
     ) -> None:
         super().__init__(message)
@@ -76,16 +77,16 @@ def _parse_service(service: ET.Element, base_url: str) -> UPnPService:
 def _device(element: ET.Element, base_url: str, depth: int, max_depth: int) -> UPnPDevice:
     if depth > max_depth:
         raise UPnPInspectionError("UPnP embedded-device nesting limit exceeded")
-    services = [
-        _parse_service(service, base_url)
-        for service_list in children(element, "serviceList")
-        for service in children(service_list, "service")
-    ]
-    embedded = [
-        _device(child, base_url, depth + 1, max_depth)
-        for device_list in children(element, "deviceList")
-        for child in children(device_list, "device")
-    ]
+    services: list[UPnPService] = []
+    for service_list in children(element, "serviceList"):
+        for service in children(service_list, "service"):
+            services.append(_parse_service(service, base_url))
+
+    embedded: list[UPnPDevice] = []
+    for device_list in children(element, "deviceList"):
+        for child in children(device_list, "device"):
+            embedded.append(_device(child, base_url, depth + 1, max_depth))
+
     return UPnPDevice(
         udn=child_text(element, "UDN"),
         device_type=child_text(element, "deviceType"),
@@ -110,22 +111,25 @@ def parse_description(
         if not xml.lstrip().startswith(b"<"):
             raise UPnPInspectionError(
                 "Endpoint did not return a UPnP XML description",
-                code="UNSUPPORTED_DESCRIPTION_FORMAT",
+                code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
                 raw_response=xml.decode("utf-8", errors="replace"),
             ) from exc
         raise UPnPInspectionError(
-            "Malformed UPnP description XML", code="MALFORMED_DESCRIPTION",
+            "Malformed UPnP description XML",
+            code=InspectionErrorCode.MALFORMED_DESCRIPTION.get_code(),
             raw_response=xml.decode("utf-8", errors="replace"),
         ) from exc
     if local_name(root.tag) != "root":
         raise UPnPInspectionError(
-            "Not a UPnP root description", code="UNSUPPORTED_DESCRIPTION_FORMAT",
+            "Not a UPnP root description",
+            code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
             raw_response=xml.decode("utf-8", errors="replace"),
         )
     device = next(iter(children(root, "device")), None)
     if device is None:
         raise UPnPInspectionError(
-            "Missing UPnP root device", code="UNSUPPORTED_DESCRIPTION_FORMAT",
+            "Missing UPnP root device",
+            code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
             raw_response=xml.decode("utf-8", errors="replace"),
         )
     return _device(device, location, 0, max_depth)
@@ -186,9 +190,51 @@ def _source_addresses(observation: DiscoveryObservation) -> frozenset[str]:
     if not addresses:
         raise UPnPInspectionError(
             "SSDP observation has no eligible source IP address",
-            code="SOURCE_ADDRESS_UNAVAILABLE",
+            code=InspectionErrorCode.SOURCE_ADDRESS_UNAVAILABLE.get_code(),
         )
     return frozenset(addresses)
+
+
+def _validate_resolved_addresses(
+    addresses: set[str], expected_addresses: frozenset[str] | None
+) -> set[str]:
+    """Enforce local-only DNS answers and bind them to SSDP source evidence."""
+    if not addresses or not all(_local_address(ip) for ip in addresses):
+        raise UPnPInspectionError(
+            "LOCATION must resolve exclusively to private LAN addresses"
+        )
+    normalized = {str(ipaddress.ip_address(ip)) for ip in addresses}
+    if expected_addresses is not None and (
+        not expected_addresses or not normalized.issubset(expected_addresses)
+    ):
+        raise UPnPInspectionError(
+            "LOCATION address does not match the SSDP source address",
+            code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH.get_code(),
+        )
+    return normalized
+
+
+async def _read_description(response: aiohttp.ClientResponse, max_bytes: int) -> bytes:
+    """Validate status and enforce the declared and actual byte limits."""
+    if response.status != HTTPStatus.OK:
+        raise UPnPInspectionError(
+            f"Unexpected HTTP status: {response.status}"
+        )
+    if (
+        response.content_length is not None
+        and response.content_length > max_bytes
+    ):
+        raise UPnPInspectionError(
+            "Description exceeds byte limit",
+            code=InspectionErrorCode.RESPONSE_TOO_LARGE.get_code(),
+        )
+    content = await response.content.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise UPnPInspectionError(
+            "Description exceeds byte limit",
+            code=InspectionErrorCode.RESPONSE_TOO_LARGE.get_code(),
+        )
+    return content
 
 
 class UPnPInspector:
@@ -229,13 +275,15 @@ class UPnPInspector:
         if any(not addresses for addresses in locations.values()):
             raise UPnPInspectionError(
                 "Conflicting SSDP source addresses for a shared LOCATION",
-                code="SOURCE_ADDRESS_MISMATCH",
+                code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH.get_code(),
             )
-        results = await asyncio.gather(*(
+        inspections = (
             self.inspect(location, expected_addresses=frozenset(addresses))
             for location, addresses in locations.items()
-        ))
-        return dict(zip(locations, results, strict=True))
+        )
+        results = await asyncio.gather(*inspections)
+        inspected = dict(zip(locations, results, strict=True))
+        return inspected
 
     async def inspect(
         self, location: str, *, expected_addresses: frozenset[str] | None = None
@@ -248,19 +296,9 @@ class UPnPInspector:
                     # Resolve and pin a vetted address to prevent DNS rebinding.
                     infos = await asyncio.get_running_loop().getaddrinfo(
                         host, port, type=socket.SOCK_STREAM)
-                    addresses = {item[4][0] for item in infos}
-                    if not addresses or not all(_local_address(ip) for ip in addresses):
-                        raise UPnPInspectionError(
-                            "LOCATION must resolve exclusively to private LAN addresses"
-                        )
-                    normalized = {str(ipaddress.ip_address(ip)) for ip in addresses}
-                    if expected_addresses is not None and (
-                        not expected_addresses or not normalized.issubset(expected_addresses)
-                    ):
-                        raise UPnPInspectionError(
-                            "LOCATION address does not match the SSDP source address",
-                            code="SOURCE_ADDRESS_MISMATCH",
-                        )
+                    _validate_resolved_addresses(
+                        {str(item[4][0]) for item in infos}, expected_addresses
+                    )
                     connector = aiohttp.TCPConnector(
                         resolver=_PinnedResolver(infos), use_dns_cache=False
                     )
@@ -268,40 +306,54 @@ class UPnPInspector:
                         connector=connector, trust_env=False
                     ) as session:
                         async with session.get(location, allow_redirects=False) as response:
-                            if response.status != HTTPStatus.OK:
-                                raise UPnPInspectionError(
-                                    f"Unexpected HTTP status: {response.status}"
-                                )
-                            if (
-                                response.content_length is not None
-                                and response.content_length > self.max_bytes
-                            ):
-                                raise UPnPInspectionError(
-                                    "Description exceeds byte limit",
-                                    code="RESPONSE_TOO_LARGE",
-                                )
-                            content = await response.content.read(self.max_bytes + 1)
-                            if len(content) > self.max_bytes:
-                                raise UPnPInspectionError(
-                                    "Description exceeds byte limit",
-                                    code="RESPONSE_TOO_LARGE",
-                                )
-                            return parse_description(content, location, max_depth=self.max_depth)
+                            content = await _read_description(response, self.max_bytes)
+                            device = parse_description(
+                                content, location, max_depth=self.max_depth
+                            )
+                            return device
             except (TimeoutError, OSError, aiohttp.ClientError) as exc:
                 raise UPnPInspectionError(
-                    "UPnP description fetch failed", code="FETCH_FAILED"
+                    "UPnP description fetch failed",
+                    code=InspectionErrorCode.FETCH_FAILED.get_code()
                 ) from exc
 
 
-class _PinnedResolver:
+class _PinnedResolver(aiohttp.abc.AbstractResolver):
     """Supply only prevalidated DNS answers to aiohttp's connector."""
 
-    def __init__(self, infos: list[tuple]) -> None:
+    def __init__(
+        self,
+        infos: list[
+            tuple[
+                socket.AddressFamily,
+                socket.SocketKind,
+                int,
+                str,
+                tuple[str, int] | tuple[str, int, int, int],
+            ]
+        ],
+    ) -> None:
         self._infos = infos
 
-    async def resolve(self, host: str, port: int, family: int = 0) -> list[dict]:
-        return [dict(host=item[4][0], hostname=host, port=port, family=item[0],
-                     proto=item[2], flags=0) for item in self._infos]
+    async def resolve(
+        self,
+        host: str,
+        port: int = 0,
+        family: socket.AddressFamily = socket.AF_INET,
+    ) -> list[aiohttp.abc.ResolveResult]:
+        results: list[aiohttp.abc.ResolveResult] = []
+        for item in self._infos:
+            results.append(
+                {
+                    "host": str(item[4][0]),
+                    "hostname": host,
+                    "port": port,
+                    "family": item[0],
+                    "proto": item[2],
+                    "flags": 0,
+                }
+            )
+        return results
 
     async def close(self) -> None:
         pass

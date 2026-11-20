@@ -7,7 +7,7 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from snf.bluetooth.assigned_numbers import company_name, uuid_details
 from snf.bluetooth.fingerprints import identify_ble_device
@@ -58,63 +58,92 @@ class BLEPlugin:
         self._running = False
 
     @staticmethod
+    def _encode_manufacturer_data(values: dict[int, bytes]) -> dict[str, str]:
+        encoded: dict[str, str] = {}
+        for company_id, value in values.items():
+            encoded[str(company_id)] = bytes(value).hex()
+        return encoded
+
+    @staticmethod
+    def _encode_service_data(values: dict[str, bytes]) -> dict[str, str]:
+        encoded: dict[str, str] = {}
+        for uuid, value in values.items():
+            encoded[str(uuid)] = bytes(value).hex()
+        return encoded
+
+    @staticmethod
+    def _company_names(manufacturer_data: dict[str, str]) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for company_id in manufacturer_data:
+            resolved_name = company_name(int(company_id))
+            if resolved_name is not None:
+                names[company_id] = resolved_name
+        return names
+
+    @staticmethod
+    def _service_names(uuids: tuple[str, ...]) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for uuid in uuids:
+            details = uuid_details(uuid, kind="service")
+            if details is not None:
+                names[uuid] = details["name"]
+        return names
+
+    @staticmethod
+    def _advertised_services(uuids: tuple[str, ...]) -> tuple[Service, ...]:
+        services: list[Service] = []
+        for uuid in uuids:
+            services.append(
+                Service(name=uuid, service_type="bluetooth-le-advertised-service")
+            )
+        return tuple(services)
+
+    @staticmethod
+    def _enrich_metadata(metadata: dict[str, Any]) -> None:
+        """Rebuild fields derived from the normalized advertisement evidence."""
+        manufacturer_data = cast(dict[str, str], metadata["manufacturer_data"])
+        service_data = cast(dict[str, str], metadata["service_data"])
+        service_uuids = cast(tuple[str, ...], metadata["service_uuids"])
+        local_name = cast(str | None, metadata["local_name"])
+
+        raw_manufacturer_data: dict[int, bytes] = {}
+        for company_id, value in manufacturer_data.items():
+            raw_manufacturer_data[int(company_id)] = bytes.fromhex(value)
+
+        metadata["device_identification"] = identify_ble_device(
+            raw_manufacturer_data, local_name=local_name
+        )
+        metadata["company_names"] = BLEPlugin._company_names(manufacturer_data)
+        metadata["service_names"] = BLEPlugin._service_names(service_uuids)
+        metadata["service_data_names"] = BLEPlugin._service_names(tuple(service_data))
+
+    @staticmethod
     def _to_device(device: _Addressable, advertisement_data: object) -> DiscoveryObservation:
-        """Normalize Bleak's public BLEDevice and AdvertisementData objects."""
+        """Normalize a BLE advertisement into a discovery observation."""
         address = str(device.address)
         advertised_name = getattr(advertisement_data, "local_name", None)
         name = advertised_name or getattr(device, "name", None) or address
-        rssi = getattr(advertisement_data, "rssi", None)
-        tx_power = getattr(advertisement_data, "tx_power", None)
+        raw_manufacturer_data = getattr(advertisement_data, "manufacturer_data", {}) or {}
+        raw_service_data = getattr(advertisement_data, "service_data", {}) or {}
         service_uuids = tuple(getattr(advertisement_data, "service_uuids", ()) or ())
-        manufacturer_data = {
-            str(company_id): bytes(value).hex()
-            for company_id, value in (
-                getattr(advertisement_data, "manufacturer_data", {}) or {}
-            ).items()
+
+        metadata: dict[str, Any] = {
+            "rssi": getattr(advertisement_data, "rssi", None),
+            "tx_power": getattr(advertisement_data, "tx_power", None),
+            "local_name": advertised_name,
+            "service_uuids": service_uuids,
+            "manufacturer_data": BLEPlugin._encode_manufacturer_data(raw_manufacturer_data),
+            "service_data": BLEPlugin._encode_service_data(raw_service_data),
         }
-        service_data = {
-            str(uuid): bytes(value).hex()
-            for uuid, value in (getattr(advertisement_data, "service_data", {}) or {}).items()
-        }
-        identification = identify_ble_device(
-            dict(getattr(advertisement_data, "manufacturer_data", {}) or {}),
-            local_name=advertised_name,
-        )
-        endpoint = Endpoint("ble", address)
-        services = tuple(
-            Service(name=uuid, service_type="bluetooth-le-advertised-service")
-            for uuid in service_uuids
-        )
+        BLEPlugin._enrich_metadata(metadata)
+
         return DiscoveryObservation(
             protocol="ble",
             identifier=address,
             name=str(name),
-            endpoints=(endpoint,),
-            services=services,
-            metadata={
-                "rssi": rssi,
-                "tx_power": tx_power,
-                "local_name": advertised_name,
-                "device_identification": identification,
-                "service_uuids": service_uuids,
-                "manufacturer_data": manufacturer_data,
-                "company_names": {
-                    key: name
-                    for key in manufacturer_data
-                    if (name := company_name(int(key))) is not None
-                },
-                "service_names": {
-                    uuid: details["name"]
-                    for uuid in service_uuids
-                    if (details := uuid_details(uuid, kind="service")) is not None
-                },
-                "service_data_names": {
-                    uuid: details["name"]
-                    for uuid in service_data
-                    if (details := uuid_details(uuid, kind="service")) is not None
-                },
-                "service_data": service_data,
-            },
+            endpoints=(Endpoint("ble", address),),
+            services=BLEPlugin._advertised_services(service_uuids),
+            metadata=metadata,
         )
 
     @staticmethod
@@ -122,44 +151,28 @@ class BLEPlugin:
         previous: DiscoveryObservation | None,
         current: DiscoveryObservation,
     ) -> DiscoveryObservation:
-        """Keep last observed fields when a partial advertisement omits them."""
+        """Preserve previously observed evidence absent from partial advertisements."""
         if previous is None:
             return current
 
         old = dict(previous.metadata)
         new = dict(current.metadata)
+
         for field in ("local_name", "tx_power"):
             if new[field] is None:
                 new[field] = old.get(field)
-        for field in ("manufacturer_data", "service_data"):
-            new[field] = {**old.get(field, {}), **new[field]}
 
-        # Derived metadata is recalculated only for fields affected by merging.
-        new["device_identification"] = identify_ble_device(
-            {int(key): bytes.fromhex(value) for key, value in new["manufacturer_data"].items()},
-            local_name=new["local_name"],
-        )
-        new["company_names"] = {
-            key: company_name(int(key))
-            for key in new["manufacturer_data"]
-            if company_name(int(key)) is not None
-        }
-        new["service_data_names"] = {
-            uuid: details["name"]
-            for uuid in new["service_data"]
-            if (details := uuid_details(uuid, kind="service")) is not None
-        }
-        uuids = tuple(dict.fromkeys((*old["service_uuids"], *new["service_uuids"])))
-        new["service_uuids"] = uuids
-        new["service_names"] = {
-            uuid: details["name"]
-            for uuid in uuids
-            if (details := uuid_details(uuid, kind="service")) is not None
-        }
-        services = tuple(
-            Service(name=uuid, service_type="bluetooth-le-advertised-service")
-            for uuid in uuids
-        )
+        for field in ("manufacturer_data", "service_data"):
+            previous_values = cast(dict[str, str], old.get(field, {}))
+            current_values = cast(dict[str, str], new[field])
+            new[field] = {**previous_values, **current_values}
+
+        old_uuids = cast(tuple[str, ...], old["service_uuids"])
+        current_uuids = cast(tuple[str, ...], new["service_uuids"])
+        service_uuids = tuple(dict.fromkeys((*old_uuids, *current_uuids)))
+        new["service_uuids"] = service_uuids
+        BLEPlugin._enrich_metadata(new)
+
         name = new["local_name"] or (
             previous.name if previous.name != current.identifier else current.name
         )
@@ -168,7 +181,7 @@ class BLEPlugin:
             identifier=current.identifier,
             name=str(name),
             endpoints=current.endpoints,
-            services=services,
+            services=BLEPlugin._advertised_services(service_uuids),
             metadata=new,
         )
 
@@ -189,6 +202,54 @@ class BLEPlugin:
         else:
             pending[-1] = event
 
+    @staticmethod
+    def _has_observation_changed(
+        previous: DiscoveryObservation, current: DiscoveryObservation
+    ) -> bool:
+        """Compare observation fields, excluding RSSI handled by its own policy."""
+        previous_metadata = dict(previous.metadata)
+        current_metadata = dict(current.metadata)
+        previous_metadata.pop("rssi", None)
+        current_metadata.pop("rssi", None)
+
+        return (
+            previous.name != current.name
+            or previous.endpoints != current.endpoints
+            or previous.services != current.services
+            or previous_metadata != current_metadata
+        )
+
+    def _baseline_rssi(self, key: str) -> int | None:
+        """Compare pending RSSI first, otherwise the last delivered RSSI."""
+        pending = self._pending.get(key)
+
+        if pending and pending[-1].state is not DiscoveryState.REMOVED:
+            rssi = pending[-1].observation.metadata.get("rssi")
+        else:
+            rssi = self._delivered_rssi.get(key)
+
+        return rssi if isinstance(rssi, int) else None
+
+    def _is_rssi_change_significant(self, key: str, new_rssi: object) -> bool:
+        """Apply the configured minimum RSSI change against the event baseline."""
+        if not self.emit_rssi_updates or not isinstance(new_rssi, int):
+            return False
+
+        baseline = self._baseline_rssi(key)
+        if baseline is None:
+            return False
+
+        return abs(baseline - new_rssi) >= self.rssi_update_threshold
+
+    def _should_emit_update(
+        self, key: str, previous: DiscoveryObservation, record: DiscoveryObservation
+    ) -> bool:
+        """Emit changed observations or RSSI updates exceeding the threshold."""
+        if self._has_observation_changed(previous, record):
+            return True
+
+        return self._is_rssi_change_significant(key, record.metadata.get("rssi"))
+
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
             return
@@ -201,33 +262,8 @@ class BLEPlugin:
             _LOGGER.debug("Reconciled BLE advertisement %s into device %s", key, record.identifier)
         self._last_emitted[key] = record
 
-        if previous is not None:
-            old_metadata = dict(previous.metadata)
-            new_metadata = dict(record.metadata)
-            old_rssi = old_metadata.pop("rssi", None)
-            new_rssi = new_metadata.pop("rssi", None)
-            unchanged = (
-                previous.name == record.name
-                and previous.endpoints == record.endpoints
-                and previous.services == record.services
-                and old_metadata == new_metadata
-            )
-            # Compare against the pending event or the last delivered event,
-            # never the latest advertisement (which may have been suppressed).
-            pending = self._pending.get(key)
-            baseline_rssi = (
-                pending[-1].observation.metadata.get("rssi")
-                if pending and pending[-1].state is not DiscoveryState.REMOVED
-                else self._delivered_rssi.get(key)
-            )
-            rssi_significant = (
-                self.emit_rssi_updates
-                and isinstance(baseline_rssi, int)
-                and isinstance(new_rssi, int)
-                and abs(baseline_rssi - new_rssi) >= self.rssi_update_threshold
-            )
-            if unchanged and not rssi_significant:
-                return
+        if previous is not None and not self._should_emit_update(key, previous, record):
+            return
         self._enqueue(DiscoveryEvent(DiscoveryState.ADDED, record))
 
     async def start(self) -> None:

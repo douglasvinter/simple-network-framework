@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator
+from importlib.resources import files
 from importlib.util import find_spec
 from typing import Any
 
@@ -12,49 +14,59 @@ from snf.models import DiscoveryEvent, DiscoveryObservation, DiscoveryState, End
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_SERVICE_TYPES = [
-    "_airplay._tcp.local.",
-    "_raop._tcp.local.",
-    "_googlecast._tcp.local.",
-    "_spotify-connect._tcp.local.",
-    "_sonos._tcp.local.",
-    "_mediaremotetv._tcp.local.",
-    "_daap._tcp.local.",
-    "_dpap._tcp.local.",
-    "_roon._tcp.local.",
-    "_plexmediasvr._tcp.local.",
-    "_hap._tcp.local.",
-    "_homekit._tcp.local.",
-    "_matter._tcp.local.",
-    "_matterc._udp.local.",
-    "_hue._tcp.local.",
-    "_esphomelib._tcp.local.",
-    "_mqtt._tcp.local.",
-    "_home-assistant._tcp.local.",
-    "_wled._tcp.local.",
-    "_shelly._tcp.local.",
-    "_ipp._tcp.local.",
-    "_ipps._tcp.local.",
-    "_printer._tcp.local.",
-    "_pdl-datastream._tcp.local.",
-    "_scanner._tcp.local.",
-    "_uscan._tcp.local.",
-    "_uscans._tcp.local.",
-    "_smb._tcp.local.",
-    "_afpovertcp._tcp.local.",
-    "_nfs._tcp.local.",
-    "_sftp-ssh._tcp.local.",
-    "_ssh._tcp.local.",
-    "_rfb._tcp.local.",
-    "_http._tcp.local.",
-    "_https._tcp.local.",
-    "_workstation._tcp.local.",
-    "_device-info._tcp.local.",
-    "_occam._udp.local.",
-]
+with files("snf").joinpath("adapters", "mdns_service_types.json").open(
+    "r", encoding="utf-8"
+) as _catalog:
+    DEFAULT_SERVICE_TYPES: list[str] = json.load(_catalog)
 
 # Backward-compatible name retained for existing examples and integrations.
 ALL_MDSNS_SERVICE_TYPES = DEFAULT_SERVICE_TYPES
+
+
+def _decode_properties(properties: dict[Any, Any]) -> dict[str, str]:
+    """Normalize DNS-SD TXT properties using the existing replacement policy."""
+    decoded: dict[str, str] = {}
+
+    for key, value in properties.items():
+        decoded_key = (
+            key.decode("utf-8", errors="replace")
+            if isinstance(key, bytes)
+            else str(key)
+        )
+        if isinstance(value, bytes):
+            decoded_value = value.decode("utf-8", errors="replace")
+        elif value is None:
+            decoded_value = ""
+        else:
+            decoded_value = str(value)
+
+        decoded[decoded_key] = decoded_value
+
+    return decoded
+
+
+def _observation_from_service_info(
+    service_type: str, name: str, info: Any, addresses: list[str], *, protocol: str = "mdns"
+) -> DiscoveryObservation:
+    """Project resolved DNS-SD records without owning resolution or event emission."""
+    identifier = f"{service_type}|{name}"
+    properties = _decode_properties(info.properties)
+    endpoints = tuple(Endpoint("ip", address, info.port) for address in addresses)
+    service = Service(
+        name=name,
+        service_type=service_type,
+        endpoints=endpoints,
+        metadata={"server": info.server, "properties": properties},
+    )
+    observation = DiscoveryObservation(
+        protocol=protocol,
+        identifier=identifier,
+        name=name,
+        endpoints=endpoints,
+        services=(service,),
+        metadata={"server": info.server, "properties": properties},
+    )
+    return observation
 
 
 class MDNSPlugin:
@@ -137,28 +149,8 @@ class MDNSPlugin:
         if not addresses:
             return
 
-        properties = {
-            (key.decode("utf-8", errors="replace") if isinstance(key, bytes) else str(key)): (
-                value.decode("utf-8", errors="replace")
-                if isinstance(value, bytes)
-                else ("" if value is None else str(value))
-            )
-            for key, value in info.properties.items()
-        }
-        endpoints = tuple(Endpoint("ip", address, info.port) for address in addresses)
-        service = Service(
-            name=name,
-            service_type=service_type,
-            endpoints=endpoints,
-            metadata={"server": info.server, "properties": properties},
-        )
-        device = DiscoveryObservation(
-            protocol=self.name,
-            identifier=identifier,
-            name=name,
-            endpoints=endpoints,
-            services=(service,),
-            metadata={"server": info.server, "properties": properties},
+        device = _observation_from_service_info(
+            service_type, name, info, addresses, protocol=self.name
         )
         await self._events.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 

@@ -23,7 +23,7 @@ def _default_route_ipv4() -> str:
         address = sock.getsockname()[0]
     if address == "0.0.0.0":
         raise OSError("Unable to determine the default-route IPv4 address")
-    return address
+    return str(address)
 
 
 class SSDPPlugin:
