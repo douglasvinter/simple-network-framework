@@ -8,7 +8,7 @@ Python clients ───────┐
 REST / SSE (optional) ┘                           │
                                             DiscoveryEngine
                                                   │
-                                      SSDP / mDNS / SLP / BLE
+                                      SSDP / mDNS / BLE
                                                   │
                                             shared queue
                                                   │

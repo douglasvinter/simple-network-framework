@@ -20,7 +20,7 @@ SNF owns protocol discovery, **protocol-aware inspection and capability resoluti
 
 | Area | SNF | Consuming application |
 | --- | --- | --- |
-| Protocol discovery and normalization (SSDP, mDNS, OpenSLP, BLE, Bluetooth Classic) | Owns | Configures |
+| Protocol discovery and normalization (SSDP, mDNS, BLE, Bluetooth Classic) | Owns | Configures |
 | Live observation registry and lifecycle | Owns | Reads/subscribes |
 | Network identity resolution and evidence | Owns | May add application knowledge |
 | Service/endpoint aggregation | Owns | Uses |
@@ -67,7 +67,7 @@ A convenience application factory may also be provided. The host owns runtime st
 2. **Inspection:** optionally retrieve and parse supported service descriptions, with provenance, timeouts, bounded responses, safe parsing, and target/redirect validation.
 3. **Interaction:** explicitly invoke supported protocol operations; inspection must not implicitly pair, write, or control devices.
 
-Planned inspectors include UPnP device/SCPD descriptions, opt-in BLE GATT enumeration, Bluetooth Classic SDP/profiles, and supported service metadata for mDNS/SLP. Bluetooth Classic needs a separate backend from Bleak BLE scanning. Audio-profile awareness is in scope; implementing an audio codec/streaming engine is not. Platform capabilities vary: unsupported operations must fail explicitly.
+Planned inspectors include UPnP device/SCPD descriptions, opt-in BLE GATT enumeration, Bluetooth Classic SDP/profiles, and supported service metadata for mDNS. Bluetooth Classic needs a separate backend from Bleak BLE scanning. Audio-profile awareness is in scope; implementing an audio codec/streaming engine is not. Platform capabilities vary: unsupported operations must fail explicitly.
 
 Keep discovery, inspection, and interaction states separate. Inspection failures must not erase valid observations. A future enriched entity projection may include identity evidence, services, endpoints, capabilities, and inspection status; its schema is not implemented.
 

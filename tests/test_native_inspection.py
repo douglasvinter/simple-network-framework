@@ -81,7 +81,7 @@ async def test_native_inspection_propagates_protocol_error():
 
 @pytest.mark.asyncio
 async def test_native_inspection_rejects_protocol_without_inspector():
-    runtime = SnapshotRuntime(DiscoveryObservation("slp", "service", "Test"))
+    runtime = SnapshotRuntime(DiscoveryObservation("custom", "service", "Test"))
     with pytest.raises(InspectionLookupError) as unsupported:
-        await runtime.inspect("slp", "service")
+        await runtime.inspect("custom", "service")
     assert unsupported.value.code == "UNSUPPORTED_PROTOCOL"
