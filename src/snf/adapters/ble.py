@@ -189,7 +189,7 @@ class BLEPlugin:
         name = new["local_name"] or (
             previous.name if previous.name != current.identifier else current.name
         )
-        observation = DiscoveryObservation(
+        return DiscoveryObservation(
             protocol=current.protocol,
             identifier=current.identifier,
             name=str(name),
@@ -197,7 +197,6 @@ class BLEPlugin:
             services=services,
             metadata=new,
         )
-        return observation
 
     def _enqueue(self, event: DiscoveryEvent) -> None:
         """Coalesce observations without losing removal/rediscovery transitions."""
@@ -216,35 +215,53 @@ class BLEPlugin:
         else:
             pending[-1] = event
 
+    @staticmethod
+    def _has_observation_changed(
+        previous: DiscoveryObservation, current: DiscoveryObservation
+    ) -> bool:
+        """Compare observation fields, excluding RSSI handled by its own policy."""
+        previous_metadata = dict(previous.metadata)
+        current_metadata = dict(current.metadata)
+        previous_metadata.pop("rssi", None)
+        current_metadata.pop("rssi", None)
+
+        return (
+            previous.name != current.name
+            or previous.endpoints != current.endpoints
+            or previous.services != current.services
+            or previous_metadata != current_metadata
+        )
+
+    def _baseline_rssi(self, key: str) -> int | None:
+        """Compare pending RSSI first, otherwise the last delivered RSSI."""
+        pending = self._pending.get(key)
+
+        if pending and pending[-1].state is not DiscoveryState.REMOVED:
+            rssi = pending[-1].observation.metadata.get("rssi")
+        else:
+            rssi = self._delivered_rssi.get(key)
+
+        return rssi if isinstance(rssi, int) else None
+
+    def _is_rssi_change_significant(self, key: str, new_rssi: object) -> bool:
+        """Apply the configured minimum RSSI change against the event baseline."""
+        if not self.emit_rssi_updates or not isinstance(new_rssi, int):
+            return False
+
+        baseline = self._baseline_rssi(key)
+        if baseline is None:
+            return False
+
+        return abs(baseline - new_rssi) >= self.rssi_update_threshold
+
     def _should_emit_update(
         self, key: str, previous: DiscoveryObservation, record: DiscoveryObservation
     ) -> bool:
-        """Compare a reconciled record with the pending or delivered baseline."""
-        old_metadata = dict(previous.metadata)
-        new_metadata = dict(record.metadata)
-        old_metadata.pop("rssi", None)
-        new_rssi = new_metadata.pop("rssi", None)
-        unchanged = (
-            previous.name == record.name
-            and previous.endpoints == record.endpoints
-            and previous.services == record.services
-            and old_metadata == new_metadata
-        )
-        # Compare against the pending event or the last delivered event,
-        # never the latest advertisement (which may have been suppressed).
-        pending = self._pending.get(key)
-        baseline_rssi = (
-            pending[-1].observation.metadata.get("rssi")
-            if pending and pending[-1].state is not DiscoveryState.REMOVED
-            else self._delivered_rssi.get(key)
-        )
-        rssi_significant = (
-            self.emit_rssi_updates
-            and isinstance(baseline_rssi, int)
-            and isinstance(new_rssi, int)
-            and abs(baseline_rssi - new_rssi) >= self.rssi_update_threshold
-        )
-        return not unchanged or rssi_significant
+        """Emit changed observations or RSSI updates exceeding the threshold."""
+        if self._has_observation_changed(previous, record):
+            return True
+
+        return self._is_rssi_change_significant(key, record.metadata.get("rssi"))
 
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
