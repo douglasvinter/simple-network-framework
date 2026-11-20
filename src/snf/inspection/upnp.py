@@ -77,16 +77,16 @@ def _parse_service(service: ET.Element, base_url: str) -> UPnPService:
 def _device(element: ET.Element, base_url: str, depth: int, max_depth: int) -> UPnPDevice:
     if depth > max_depth:
         raise UPnPInspectionError("UPnP embedded-device nesting limit exceeded")
-    services = [
-        _parse_service(service, base_url)
-        for service_list in children(element, "serviceList")
-        for service in children(service_list, "service")
-    ]
-    embedded = [
-        _device(child, base_url, depth + 1, max_depth)
-        for device_list in children(element, "deviceList")
-        for child in children(device_list, "device")
-    ]
+    services: list[UPnPService] = []
+    for service_list in children(element, "serviceList"):
+        for service in children(service_list, "service"):
+            services.append(_parse_service(service, base_url))
+
+    embedded: list[UPnPDevice] = []
+    for device_list in children(element, "deviceList"):
+        for child in children(device_list, "device"):
+            embedded.append(_device(child, base_url, depth + 1, max_depth))
+
     return UPnPDevice(
         udn=child_text(element, "UDN"),
         device_type=child_text(element, "deviceType"),
@@ -277,11 +277,13 @@ class UPnPInspector:
                 "Conflicting SSDP source addresses for a shared LOCATION",
                 code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH.get_code(),
             )
-        results = await asyncio.gather(*(
+        inspections = (
             self.inspect(location, expected_addresses=frozenset(addresses))
             for location, addresses in locations.items()
-        ))
-        return dict(zip(locations, results, strict=True))
+        )
+        results = await asyncio.gather(*inspections)
+        inspected = dict(zip(locations, results, strict=True))
+        return inspected
 
     async def inspect(
         self, location: str, *, expected_addresses: frozenset[str] | None = None
@@ -305,7 +307,10 @@ class UPnPInspector:
                     ) as session:
                         async with session.get(location, allow_redirects=False) as response:
                             content = await _read_description(response, self.max_bytes)
-                            return parse_description(content, location, max_depth=self.max_depth)
+                            device = parse_description(
+                                content, location, max_depth=self.max_depth
+                            )
+                            return device
             except (TimeoutError, OSError, aiohttp.ClientError) as exc:
                 raise UPnPInspectionError(
                     "UPnP description fetch failed",
