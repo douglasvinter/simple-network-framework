@@ -19,18 +19,18 @@ from snf.api.inspection_responses import (
 )
 from snf.api.schemas import (
     BLEInspectionErrorResponse,
-    InspectionErrorResponse,
-    MDNSInspectionErrorResponse,
     BLEInspectionResponse,
     DiscoveryObservationResponse,
+    InspectionErrorResponse,
     InspectionSuccessResponse,
+    MDNSInspectionErrorResponse,
     MDNSInspectionResponse,
     NetworkEntityResponse,
     UPnPDeviceResponse,
 )
 from snf.entities import NetworkEntity
-from snf.inspection.error_codes import InspectionErrorCode
 from snf.inspection.ble import BLEInspectionError
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.inspection.mdns import MDNSInspectionError
 from snf.inspection.upnp import UPnPInspectionError
 from snf.models import DiscoveryObservation
