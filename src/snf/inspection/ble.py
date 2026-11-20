@@ -22,7 +22,7 @@ class BLEInspectionError(ValueError):
     """Stable error code for failed BLE inspection."""
 
     def __init__(
-        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED
+        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED.get_code()
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -81,11 +81,11 @@ class BLEInspector:
         if observation.protocol != "ble":
             raise BLEInspectionError(
                 "Only BLE observations can be inspected",
-                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code()
             )
         if not observation.identifier.strip():
             raise BLEInspectionError(
-                "Observation has no BLE identifier", code=InspectionErrorCode.INVALID_OBSERVATION
+                "Observation has no BLE identifier", code=InspectionErrorCode.INVALID_OBSERVATION.get_code()
             )
         try:
             from bleak import BleakClient
@@ -93,7 +93,7 @@ class BLEInspector:
         except ImportError as exc:
             raise BLEInspectionError(
                 "Install BLE support with the ble extra",
-                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
+                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE.get_code()
             ) from exc
 
         try:
@@ -102,6 +102,6 @@ class BLEInspector:
         except (BleakError, OSError, TimeoutError) as exc:
             _LOGGER.exception("BLE GATT inspection failed for %s", observation.identifier)
             raise BLEInspectionError(
-                "BLE GATT service enumeration failed", code=InspectionErrorCode.CONNECTION_FAILED
+                "BLE GATT service enumeration failed", code=InspectionErrorCode.CONNECTION_FAILED.get_code()
             ) from exc
         return BLEDeviceDetails(identifier=observation.identifier, services=services)
