@@ -13,6 +13,7 @@ from snf.api.schemas import (
     MDNSInspectionErrorResponse,
     UPnPDeviceResponse,
 )
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.inspection.ssdp_metadata import SSDPMetadataParser
 from snf.models import DiscoveryObservation
 
@@ -20,7 +21,7 @@ from snf.models import DiscoveryObservation
 def upnp_error_status(code: str) -> int:
     return (
         HTTPStatus.UNPROCESSABLE_ENTITY
-        if code in {"UNSUPPORTED_DESCRIPTION_FORMAT", "MALFORMED_DESCRIPTION"}
+        if code in {InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT, InspectionErrorCode.MALFORMED_DESCRIPTION}
         else HTTPStatus.BAD_GATEWAY
     )
 
@@ -28,7 +29,7 @@ def upnp_error_status(code: str) -> int:
 def mdns_error_status(code: str) -> int:
     return (
         HTTPStatus.UNPROCESSABLE_ENTITY
-        if code == "INVALID_OBSERVATION"
+        if code == InspectionErrorCode.INVALID_OBSERVATION
         else HTTPStatus.BAD_GATEWAY
     )
 
