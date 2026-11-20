@@ -13,6 +13,7 @@ from snf.inspection.ble import BLEDeviceDetails, BLEInspector
 from snf.inspection.mdns import MDNSInspector, MDNSServiceDetails
 from snf.inspection.upnp import UPnPDevice, UPnPInspector
 from snf.entities import EntityResolver, NetworkEntity
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.models import DiscoveryEvent, DiscoveryObservation
 from snf.plugins import DiscoveryPlugin, create_plugins
 from snf.storage import InMemoryStorage, ObservationStorage
@@ -142,19 +143,19 @@ class NetworkRuntime:
         if not identifier or not identifier.strip():
             raise InspectionLookupError(
                 f"An inspection identifier is required for {protocol}",
-                code="INVALID_IDENTIFIER",
+                code=InspectionErrorCode.INVALID_IDENTIFIER,
             )
         self.validate_protocol(protocol)
         if protocol not in ("ssdp", "mdns", "ble"):
             raise InspectionLookupError(
                 f"Inspection is not supported for protocol {protocol!r}",
-                code="UNSUPPORTED_PROTOCOL",
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL,
             )
         observation = self.get(protocol, identifier)
         if observation is None:
             raise InspectionLookupError(
                 f"{protocol.upper()} observation not found",
-                code="OBSERVATION_NOT_FOUND",
+                code=InspectionErrorCode.OBSERVATION_NOT_FOUND,
             )
         if protocol == "ssdp":
             return await UPnPInspector().inspect_observation(observation)
