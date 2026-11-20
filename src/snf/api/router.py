@@ -12,8 +12,10 @@ from sse_starlette import EventSourceResponse, ServerSentEvent
 from snf.api.inspection_responses import (
     ble_error_status,
     ble_failure,
+    ble_success,
     mdns_error_status,
     mdns_failure,
+    mdns_success,
     upnp_error_status,
     upnp_failure,
 )
@@ -153,15 +155,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except MDNSInspectionError as exc:
             status = mdns_error_status(exc.code)
             return mdns_failure(status, exc.code, str(exc))
-        return MDNSInspectionResponse.model_validate({
-            "instance_name": details.instance_name,
-            "service_type": details.service_type,
-            "server": details.server,
-            "port": details.port,
-            "addresses": details.addresses,
-            "properties": details.properties,
-            "error": {},
-        })
+        return mdns_success(details)
 
     @router.get(
         "/discoveries/inspect/ble",
@@ -194,24 +188,7 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         except BLEInspectionError as exc:
             status = ble_error_status(exc.code)
             return ble_failure(status, exc.code, str(exc))
-        return BLEInspectionResponse.model_validate({
-            "identifier": details.identifier,
-            "services": [
-                {
-                    "uuid": service.uuid,
-                    "characteristics": [
-                        {
-                            "uuid": characteristic.uuid,
-                            "properties": characteristic.properties,
-                            "descriptors": characteristic.descriptors,
-                        }
-                        for characteristic in service.characteristics
-                    ],
-                }
-                for service in details.services
-            ],
-            "error": {},
-        })
+        return ble_success(details)
 
     @router.get("/discoveries/events", response_class=EventSourceResponse)
     async def events(request: Request, protocol: str | None = None) -> EventSourceResponse:
