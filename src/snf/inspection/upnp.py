@@ -211,6 +211,29 @@ def _validate_resolved_addresses(
     return normalized
 
 
+async def _read_description(response: aiohttp.ClientResponse, max_bytes: int) -> bytes:
+    """Validate status and enforce the declared and actual byte limits."""
+            if response.status != HTTPStatus.OK:
+                raise UPnPInspectionError(
+                    f"Unexpected HTTP status: {response.status}"
+                )
+            if (
+                response.content_length is not None
+                and response.content_length > max_bytes
+            ):
+                raise UPnPInspectionError(
+                    "Description exceeds byte limit",
+                    code=InspectionErrorCode.RESPONSE_TOO_LARGE,
+                )
+            content = await response.content.read(max_bytes + 1)
+            if len(content) > max_bytes:
+                raise UPnPInspectionError(
+                    "Description exceeds byte limit",
+                    code=InspectionErrorCode.RESPONSE_TOO_LARGE,
+                )
+    return content
+
+
 class UPnPInspector:
     """Fetch bounded local UPnP XML; never invoke advertised actions."""
 
@@ -278,24 +301,7 @@ class UPnPInspector:
                         connector=connector, trust_env=False
                     ) as session:
                         async with session.get(location, allow_redirects=False) as response:
-                            if response.status != HTTPStatus.OK:
-                                raise UPnPInspectionError(
-                                    f"Unexpected HTTP status: {response.status}"
-                                )
-                            if (
-                                response.content_length is not None
-                                and response.content_length > self.max_bytes
-                            ):
-                                raise UPnPInspectionError(
-                                    "Description exceeds byte limit",
-                                    code=InspectionErrorCode.RESPONSE_TOO_LARGE,
-                                )
-                            content = await response.content.read(self.max_bytes + 1)
-                            if len(content) > self.max_bytes:
-                                raise UPnPInspectionError(
-                                    "Description exceeds byte limit",
-                                    code=InspectionErrorCode.RESPONSE_TOO_LARGE,
-                                )
+                            content = await _read_description(response, self.max_bytes)
                             return parse_description(content, location, max_depth=self.max_depth)
             except (TimeoutError, OSError, aiohttp.ClientError) as exc:
                 raise UPnPInspectionError(
