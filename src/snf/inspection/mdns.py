@@ -99,7 +99,8 @@ class MDNSInspector:
                 await zeroconf.async_close()
         except (OSError, TimeoutError) as exc:
             raise MDNSInspectionError(
-                "mDNS service resolution failed", code=InspectionErrorCode.RESOLUTION_FAILED.get_code()
+                "mDNS service resolution failed",
+                code=InspectionErrorCode.RESOLUTION_FAILED.get_code()
             ) from exc
         if info is None:
             raise MDNSInspectionError(
