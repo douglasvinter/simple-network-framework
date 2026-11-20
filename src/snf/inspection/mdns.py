@@ -16,7 +16,7 @@ class MDNSInspectionError(ValueError):
     """Stable inspection error suitable for API mapping."""
 
     def __init__(
-        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED
+        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED.get_code()
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -45,14 +45,14 @@ class MDNSMetadataParser:
         if observation.protocol != MDNS_PROTOCOL:
             raise MDNSInspectionError(
                 "Only mDNS observations can be inspected",
-                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code()
             )
         for service in observation.services:
             if service.service_type and service.name:
                 return service.service_type, service.name
         raise MDNSInspectionError(
             "Observation has no DNS-SD service instance",
-            code=InspectionErrorCode.INVALID_OBSERVATION
+            code=InspectionErrorCode.INVALID_OBSERVATION.get_code()
         )
 
     def details(self, service_type: str, name: str, info: Any) -> MDNSServiceDetails:
@@ -86,7 +86,7 @@ class MDNSInspector:
         except ImportError as exc:
             raise MDNSInspectionError(
                 "Install mDNS support with the mdns extra",
-                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
+                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE.get_code()
             ) from exc
 
         try:
@@ -99,11 +99,11 @@ class MDNSInspector:
                 await zeroconf.async_close()
         except (OSError, TimeoutError) as exc:
             raise MDNSInspectionError(
-                "mDNS service resolution failed", code=InspectionErrorCode.RESOLUTION_FAILED
+                "mDNS service resolution failed", code=InspectionErrorCode.RESOLUTION_FAILED.get_code()
             ) from exc
         if info is None:
             raise MDNSInspectionError(
                 "mDNS service instance did not resolve",
-                code=InspectionErrorCode.SERVICE_UNAVAILABLE
+                code=InspectionErrorCode.SERVICE_UNAVAILABLE.get_code()
             )
         return self._parser.details(service_type, name, info)
