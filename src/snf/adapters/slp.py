@@ -67,6 +67,7 @@ class SLPPlugin:
         ]
 
     async def start(self) -> None:
+        self._seen.clear()
         self._running = True
         self._stop_event.clear()
 
@@ -109,14 +110,29 @@ class SLPPlugin:
             if service_types is None:
                 service_types = await self._run("findsrvtypes")
 
+            # Each completed scan is an authoritative snapshot for the configured
+            # service types. Do not emit removals if a command fails mid-scan.
+            current: dict[str, DiscoveryObservation] = {}
             for service_type in service_types:
                 if not self._running:
                     break
                 for service_url in await self._run("findsrvs", service_type):
-                    if service_url in self._seen:
-                        continue
-                    self._seen.add(service_url)
-                    yield DiscoveryEvent(DiscoveryState.ADDED, self._to_device(service_url))
+                    observation = self._to_device(service_url)
+                    current[observation.identifier] = observation
+
+            if not self._running:
+                break
+
+            for identifier, observation in current.items():
+                if identifier not in self._seen:
+                    yield DiscoveryEvent(DiscoveryState.ADDED, observation)
+
+            for identifier in self._seen - current.keys():
+                yield DiscoveryEvent(
+                    DiscoveryState.REMOVED, self._to_device(identifier)
+                )
+
+            self._seen = set(current)
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)
