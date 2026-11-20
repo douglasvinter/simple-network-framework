@@ -11,7 +11,7 @@ python -m pip install -e ".[all,dev]"  # local development: protocols + API + te
 python -m pip install "simple-network-framework[api]"  # HTTP only
 ```
 
-The `all` extra includes SSDP, mDNS, BLE, FastAPI, SSE, and Uvicorn. OpenSLP additionally requires the native `slptool` executable on `PATH`. Installing HTTP dependencies does not start a server.
+The `all` extra includes SSDP, mDNS, BLE, FastAPI, SSE, and Uvicorn. Installing HTTP dependencies does not start a server.
 
 ## Direct discovery
 

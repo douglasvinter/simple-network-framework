@@ -30,7 +30,6 @@ dev = ["pytest>=8", "pytest-asyncio>=1", "ruff>=0.14", "mypy>=1.18", "httpx>=0.2
 [project.entry-points."snf.protocols"]
 ssdp = "snf.adapters.ssdp:SSDPPlugin"
 mdns = "snf.adapters.mdns:MDNSPlugin"
-slp = "snf.adapters.slp:SLPPlugin"
 ble = "snf.adapters.ble:BLEPlugin"
 
 [tool.hatch.build.targets.wheel]

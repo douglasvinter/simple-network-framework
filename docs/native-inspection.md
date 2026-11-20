@@ -19,7 +19,6 @@ async with NetworkRuntime() as runtime:
 - `runtime.get(protocol, identifier)` returns a live observation or `None`. It does not perform network I/O.
 - `await runtime.inspect(protocol, identifier)` resolves an existing live observation and performs **explicit network I/O** using the corresponding protocol inspector.
 - `ssdp` returns `UPnPDevice`, `mdns` returns `MDNSServiceDetails`, and `ble` returns `BLEDeviceDetails`. There is no universal inspected-device model.
-- `slp` does not currently have an inspection implementation. Unsupported inspection requests raise `InspectionLookupError` with `code="UNSUPPORTED_PROTOCOL"`.
 - Empty identifiers and missing observations raise `InspectionLookupError` with `INVALID_IDENTIFIER` and `OBSERVATION_NOT_FOUND`, respectively. Protocol-specific inspection errors retain their existing error types and codes.
 - Inspection does not update discovery observations, persist results, or automatically retry failed requests.
 - Inspection may connect to a peripheral or perform network requests. SNF does **not** guarantee that concurrent inspections of the same target are supported. Consumers such as SHA must coordinate or lock inspection requests when appropriate for their devices and protocols.

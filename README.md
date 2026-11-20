@@ -36,10 +36,7 @@ the target direction and trade-offs.
 python -m pip install 'simple-network-framework[all]'
 ```
 
-This installs the framework, its SSDP, mDNS, and BLE backends, and the optional HTTP API dependencies (FastAPI, SSE and Uvicorn). SLP has an additional
-native dependency: the OpenSLP `slptool` executable must be installed separately
-and available on `PATH`. OpenSLP is not a Python package, and availability and
-installation steps vary by operating system.
+This installs the framework, its SSDP, mDNS, and BLE backends, and the optional HTTP API dependencies (FastAPI, SSE and Uvicorn).
 
 ## Platform setup
 
@@ -52,9 +49,6 @@ installation steps vary by operating system.
 - Access to the same LAN as the devices you want to discover.
 - Windows Defender Firewall configured to allow Python network access on the
   appropriate network profile.
-- For SLP only: a Windows-compatible OpenSLP distribution that provides
-  `slptool.exe`. SNF does not bundle this executable; SLP availability on Windows
-  depends on the external distribution you install.
 - For BLE discovery: a supported Bluetooth adapter and Windows Bluetooth stack.
 
 **Install**
@@ -103,13 +97,11 @@ python .\\examples\\discover_all.py
 - Python 3.11+ and the `venv` / `pip` components for that Python installation.
 - Access to the same LAN as the devices you want to discover.
 - A firewall and network configuration that permit the required multicast traffic.
-- For SLP only: OpenSLP client utilities providing the `slptool` executable.
 - For BLE discovery: a supported Bluetooth adapter and BlueZ (the Linux Bluetooth
   protocol stack), with the required user/session permissions.
 
 On Debian or Ubuntu, if virtual-environment support is not already installed,
-you may need the distribution's `python3-venv` package. Install OpenSLP using
-your distribution's package manager; package names vary by distribution.
+you may need the distribution's `python3-venv` package. 
 
 **Install**
 
@@ -150,8 +142,6 @@ python examples/discover_all.py
 - Access to the same LAN as the devices you want to discover.
 - Local Network access for the terminal application running Python, if macOS
   requests permission.
-- For SLP only: an OpenSLP installation that provides the `slptool` executable
-  and makes it available on `PATH`. SNF does not bundle OpenSLP.
 - For BLE discovery: a supported Bluetooth adapter and macOS Bluetooth permissions.
 
 **Install**
@@ -225,10 +215,6 @@ The engine starts plugins concurrently and merges their event streams. A consume
 can inspect the current immutable inventory through `engine.observations`, or retrieve
 a protocol-scoped record with `engine.get_observation(protocol, identifier)`.
 
-To include SLP, install OpenSLP and make sure `slptool` is on `PATH` before
-instantiating its adapter. The example script selects SLP automatically when
-`slptool` is available.
-
 ## Protocol-specific examples
 
 Run these scripts from the repository root after installing SNF in your Python
@@ -237,7 +223,6 @@ environment (for local development, `python -m pip install -e '.[all,dev]'`):
 ```bash
 python examples/mdns_test.py
 python examples/ssdp_test.py
-python examples/slp_test.py
 python examples/ble_test.py
 python examples/discover_all.py
 ```
@@ -246,7 +231,6 @@ Each standalone example uses `DiscoveryEngine` with one configured adapter,
 except `discover_all.py`, which loads installed entry-point plugins.
 SSDP requires `async-upnp-client`, mDNS requires `zeroconf`, and BLE
 requires `bleak` plus a supported Bluetooth adapter and permissions.
-SLP requires the external OpenSLP `slptool` executable on `PATH`.
 If there are no matching devices/services, the discovery stream may wait
 without printing events. Press Ctrl+C to stop the examples.
 
@@ -284,11 +268,7 @@ hardware identities: addresses may be randomized or rotate for privacy.
 | --- | --- | --- |
 | SSDP / UPnP | async-upnp-client | UPnP identifiers, services and IP endpoints |
 | mDNS / DNS-SD | python-zeroconf | Service instances, TXT metadata and IP endpoints |
-| SLPv2 | OpenSLP slptool | SLP service URLs and endpoints |
 | Bluetooth LE | Bleak | Peripheral advertisements, RSSI, service UUIDs and manufacturer data |
-
-The SLP adapter delegates RFC 2608 wire protocol behavior to OpenSLP and uses
-its command-line interface rather than an unmaintained Python binding.
 
 ## Third-party plugins
 
