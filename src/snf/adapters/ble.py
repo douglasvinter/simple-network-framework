@@ -85,37 +85,42 @@ class BLEPlugin:
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
             for uuid in service_uuids
         )
-        return DiscoveryObservation(
+        company_names = {
+            key: name
+            for key in manufacturer_data
+            if (name := company_name(int(key))) is not None
+        }
+        service_names = {
+            uuid: details["name"]
+            for uuid in service_uuids
+            if (details := uuid_details(uuid, kind="service")) is not None
+        }
+        service_data_names = {
+            uuid: details["name"]
+            for uuid in service_data
+            if (details := uuid_details(uuid, kind="service")) is not None
+        }
+        metadata = {
+            "rssi": rssi,
+            "tx_power": tx_power,
+            "local_name": advertised_name,
+            "device_identification": identification,
+            "service_uuids": service_uuids,
+            "manufacturer_data": manufacturer_data,
+            "company_names": company_names,
+            "service_names": service_names,
+            "service_data_names": service_data_names,
+            "service_data": service_data,
+        }
+        observation = DiscoveryObservation(
             protocol="ble",
             identifier=address,
             name=str(name),
             endpoints=(endpoint,),
             services=services,
-            metadata={
-                "rssi": rssi,
-                "tx_power": tx_power,
-                "local_name": advertised_name,
-                "device_identification": identification,
-                "service_uuids": service_uuids,
-                "manufacturer_data": manufacturer_data,
-                "company_names": {
-                    key: name
-                    for key in manufacturer_data
-                    if (name := company_name(int(key))) is not None
-                },
-                "service_names": {
-                    uuid: details["name"]
-                    for uuid in service_uuids
-                    if (details := uuid_details(uuid, kind="service")) is not None
-                },
-                "service_data_names": {
-                    uuid: details["name"]
-                    for uuid in service_data
-                    if (details := uuid_details(uuid, kind="service")) is not None
-                },
-                "service_data": service_data,
-            },
+            metadata=metadata,
         )
+        return observation
 
     @staticmethod
     def _reconcile(
