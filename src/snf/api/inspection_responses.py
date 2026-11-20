@@ -26,8 +26,8 @@ def upnp_error_status(code: str) -> int:
     return (
         HTTPStatus.UNPROCESSABLE_ENTITY
         if code in {
-            InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT,
-            InspectionErrorCode.MALFORMED_DESCRIPTION,
+            InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT.get_code(),
+            InspectionErrorCode.MALFORMED_DESCRIPTION.get_code(),
         }
         else HTTPStatus.BAD_GATEWAY
     )
@@ -36,7 +36,7 @@ def upnp_error_status(code: str) -> int:
 def mdns_error_status(code: str) -> int:
     return (
         HTTPStatus.UNPROCESSABLE_ENTITY
-        if code == InspectionErrorCode.INVALID_OBSERVATION
+        if code == InspectionErrorCode.INVALID_OBSERVATION.get_code()
         else HTTPStatus.BAD_GATEWAY
     )
 
