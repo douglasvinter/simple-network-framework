@@ -11,6 +11,7 @@ from snf.api.schemas import (
     BLEInspectionErrorResponse,
     BLEInspectionResponse,
     InspectionErrorResponse,
+    InspectionErrorDetail,
     MDNSInspectionErrorResponse,
     MDNSInspectionResponse,
     UPnPDeviceResponse,
@@ -71,21 +72,21 @@ def upnp_failure(
         status_code=status,
         content=InspectionErrorResponse(
             device=_advertised_device(observation) if observation else None,
-            error={"code": code, "message": message, "raw_response": raw_response},
+            error=InspectionErrorDetail(code=code, message=message, raw_response=raw_response),
         ).model_dump(),
     )
 
 
 def mdns_failure(status: int, code: str, message: str) -> JSONResponse:
     payload = MDNSInspectionErrorResponse(
-        service=None, error={"code": code, "message": message}
+        service=None, error=InspectionErrorDetail(code=code, message=message)
     )
     return JSONResponse(status_code=status, content=payload.model_dump())
 
 
 def ble_failure(status: int, code: str, message: str) -> JSONResponse:
     payload = BLEInspectionErrorResponse(
-        device=None, error={"code": code, "message": message}
+        device=None, error=InspectionErrorDetail(code=code, message=message)
     )
     return JSONResponse(status_code=status, content=payload.model_dump())
 
@@ -108,14 +109,14 @@ def ble_success(details: BLEDeviceDetails) -> BLEInspectionResponse:
     for service in details.services:
         characteristics: list[dict[str, object]] = []
         for characteristic in service.characteristics:
-            characteristic_payload = {
+            characteristic_payload: dict[str, object] = {
                 "uuid": characteristic.uuid,
                 "properties": characteristic.properties,
                 "descriptors": characteristic.descriptors,
             }
             characteristics.append(characteristic_payload)
 
-        service_payload = {
+        service_payload: dict[str, object] = {
             "uuid": service.uuid,
             "characteristics": characteristics,
         }
