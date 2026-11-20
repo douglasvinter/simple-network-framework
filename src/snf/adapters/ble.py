@@ -189,6 +189,36 @@ class BLEPlugin:
         else:
             pending[-1] = event
 
+    def _should_emit_update(
+        self, key: str, previous: DiscoveryObservation, record: DiscoveryObservation
+    ) -> bool:
+        """Compare a reconciled record with the pending or delivered baseline."""
+        old_metadata = dict(previous.metadata)
+        new_metadata = dict(record.metadata)
+        old_metadata.pop("rssi", None)
+        new_rssi = new_metadata.pop("rssi", None)
+        unchanged = (
+            previous.name == record.name
+            and previous.endpoints == record.endpoints
+            and previous.services == record.services
+            and old_metadata == new_metadata
+        )
+        # Compare against the pending event or the last delivered event,
+        # never the latest advertisement (which may have been suppressed).
+        pending = self._pending.get(key)
+        baseline_rssi = (
+            pending[-1].observation.metadata.get("rssi")
+            if pending and pending[-1].state is not DiscoveryState.REMOVED
+            else self._delivered_rssi.get(key)
+        )
+        rssi_significant = (
+            self.emit_rssi_updates
+            and isinstance(baseline_rssi, int)
+            and isinstance(new_rssi, int)
+            and abs(baseline_rssi - new_rssi) >= self.rssi_update_threshold
+        )
+        return not unchanged or rssi_significant
+
     def _on_advertisement(self, device: _Addressable, advertisement_data: object) -> None:
         if not self._running:
             return
@@ -201,33 +231,8 @@ class BLEPlugin:
             _LOGGER.debug("Reconciled BLE advertisement %s into device %s", key, record.identifier)
         self._last_emitted[key] = record
 
-        if previous is not None:
-            old_metadata = dict(previous.metadata)
-            new_metadata = dict(record.metadata)
-            old_rssi = old_metadata.pop("rssi", None)
-            new_rssi = new_metadata.pop("rssi", None)
-            unchanged = (
-                previous.name == record.name
-                and previous.endpoints == record.endpoints
-                and previous.services == record.services
-                and old_metadata == new_metadata
-            )
-            # Compare against the pending event or the last delivered event,
-            # never the latest advertisement (which may have been suppressed).
-            pending = self._pending.get(key)
-            baseline_rssi = (
-                pending[-1].observation.metadata.get("rssi")
-                if pending and pending[-1].state is not DiscoveryState.REMOVED
-                else self._delivered_rssi.get(key)
-            )
-            rssi_significant = (
-                self.emit_rssi_updates
-                and isinstance(baseline_rssi, int)
-                and isinstance(new_rssi, int)
-                and abs(baseline_rssi - new_rssi) >= self.rssi_update_threshold
-            )
-            if unchanged and not rssi_significant:
-                return
+        if previous is not None and not self._should_emit_update(key, previous, record):
+            return
         self._enqueue(DiscoveryEvent(DiscoveryState.ADDED, record))
 
     async def start(self) -> None:
