@@ -9,11 +9,11 @@ from contextlib import suppress
 from typing import Literal, Self, cast, overload
 
 from snf.engine import DiscoveryEngine
+from snf.entities import EntityResolver, NetworkEntity
 from snf.inspection.ble import BLEDeviceDetails, BLEInspector
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.inspection.mdns import MDNSInspector, MDNSServiceDetails
 from snf.inspection.upnp import UPnPDevice, UPnPInspector
-from snf.entities import EntityResolver, NetworkEntity
-from snf.inspection.error_codes import InspectionErrorCode
 from snf.models import DiscoveryEvent, DiscoveryObservation
 from snf.plugins import DiscoveryPlugin, create_plugins
 from snf.storage import InMemoryStorage, ObservationStorage
