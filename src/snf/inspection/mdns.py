@@ -15,7 +15,9 @@ MDNS_PROTOCOL = "mdns"
 class MDNSInspectionError(ValueError):
     """Stable inspection error suitable for API mapping."""
 
-    def __init__(self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED) -> None:
+    def __init__(
+        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED
+    ) -> None:
         super().__init__(message)
         self.code = code
 
