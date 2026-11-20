@@ -8,4 +8,4 @@ def test_mdns_catalog_is_loaded_as_mutable_list_and_alias_is_identical():
     assert ALL_MDSNS_SERVICE_TYPES is DEFAULT_SERVICE_TYPES
     assert DEFAULT_SERVICE_TYPES[0] == "_airplay._tcp.local."
     assert DEFAULT_SERVICE_TYPES[-1] == "_occam._udp.local."
-    assert len(DEFAULT_SERVICE_TYPES) == 37
+    assert len(DEFAULT_SERVICE_TYPES) == 38
