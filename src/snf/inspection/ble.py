@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 
 from snf.bluetooth.assigned_numbers import uuid_details
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.models import DiscoveryObservation
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ def _assigned_name(uuid: str, kind: str) -> str | None:
 class BLEInspectionError(ValueError):
     """Stable error code for failed BLE inspection."""
 
-    def __init__(self, message: str, *, code: str = "INSPECTION_FAILED") -> None:
+    def __init__(self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED) -> None:
         super().__init__(message)
         self.code = code
 
@@ -52,18 +53,18 @@ class BLEInspector:
     async def inspect_observation(self, observation: DiscoveryObservation) -> BLEDeviceDetails:
         if observation.protocol != "ble":
             raise BLEInspectionError(
-                "Only BLE observations can be inspected", code="UNSUPPORTED_PROTOCOL"
+                "Only BLE observations can be inspected", code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
             )
         if not observation.identifier.strip():
             raise BLEInspectionError(
-                "Observation has no BLE identifier", code="INVALID_OBSERVATION"
+                "Observation has no BLE identifier", code=InspectionErrorCode.INVALID_OBSERVATION
             )
         try:
             from bleak import BleakClient
             from bleak.exc import BleakError
         except ImportError as exc:
             raise BLEInspectionError(
-                "Install BLE support with the ble extra", code="DEPENDENCY_UNAVAILABLE"
+                "Install BLE support with the ble extra", code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
             ) from exc
 
         try:
@@ -94,6 +95,6 @@ class BLEInspector:
         except (BleakError, OSError, TimeoutError) as exc:
             _LOGGER.exception("BLE GATT inspection failed for %s", observation.identifier)
             raise BLEInspectionError(
-                "BLE GATT service enumeration failed", code="CONNECTION_FAILED"
+                "BLE GATT service enumeration failed", code=InspectionErrorCode.CONNECTION_FAILED
             ) from exc
         return BLEDeviceDetails(identifier=observation.identifier, services=services)
