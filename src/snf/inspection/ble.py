@@ -80,7 +80,8 @@ class BLEInspector:
     async def inspect_observation(self, observation: DiscoveryObservation) -> BLEDeviceDetails:
         if observation.protocol != "ble":
             raise BLEInspectionError(
-                "Only BLE observations can be inspected", code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
+                "Only BLE observations can be inspected",
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
             )
         if not observation.identifier.strip():
             raise BLEInspectionError(
@@ -91,7 +92,8 @@ class BLEInspector:
             from bleak.exc import BleakError
         except ImportError as exc:
             raise BLEInspectionError(
-                "Install BLE support with the ble extra", code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
+                "Install BLE support with the ble extra",
+                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
             ) from exc
 
         try:
