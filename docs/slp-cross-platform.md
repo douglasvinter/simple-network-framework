@@ -2,8 +2,9 @@
 
 SNF's SLP adapter delegates SLP wire behavior to the system-installed OpenSLP
 `slptool` executable. It does not implement an SLP client or ship binaries.
-Discovery is experimental until validated with an actual SLP responder on both
-Windows and Linux. See RFC 2608 for SLPv2 semantics.
+Discovery is experimentally validated with a local SLP test service on Windows.
+Linux/WSL2 end-to-end validation is deferred to the dedicated cross-protocol
+Linux testing phase; it is not a merge requirement for this change. See RFC 2608 for SLPv2 semantics.
 
 ## Native Windows (first acceptance target)
 
@@ -20,7 +21,7 @@ slptool.exe findsrvtypes
 python -m pytest tests/test_slp.py tests/test_slp_subprocess.py tests/test_slp_lifecycle.py -q
 ```
 
-## Linux / WSL2 (second acceptance target)
+## Linux / WSL2 (future cross-protocol validation)
 
 Install a distribution-provided OpenSLP `slptool` package, if available.
 Package availability varies by distribution and release.
@@ -34,7 +35,7 @@ python -m pytest tests/test_slp.py tests/test_slp_subprocess.py tests/test_slp_l
 WSL2 NAT/multicast restrictions can prevent discovery of LAN devices.
 Successful mocked tests do **not** establish end-to-end network compatibility.
 
-## Real binary acceptance test (both environments)
+## Real binary acceptance test (Windows now; Linux later)
 
 Run `slptool findsrvtypes` and `slptool findsrvs service:<type>` against
 a **controlled SLP responder** registered in the same scope. Confirm that the
