@@ -9,11 +9,15 @@ from fastapi.responses import JSONResponse
 
 from snf.api.schemas import (
     BLEInspectionErrorResponse,
+    BLEInspectionResponse,
     InspectionErrorResponse,
     MDNSInspectionErrorResponse,
+    MDNSInspectionResponse,
     UPnPDeviceResponse,
 )
+from snf.inspection.ble import BLEDeviceDetails
 from snf.inspection.error_codes import InspectionErrorCode
+from snf.inspection.mdns import MDNSServiceDetails
 from snf.inspection.ssdp_metadata import SSDPMetadataParser
 from snf.models import DiscoveryObservation
 
@@ -84,3 +88,36 @@ def ble_failure(status: int, code: str, message: str) -> JSONResponse:
         device=None, error={"code": code, "message": message}
     )
     return JSONResponse(status_code=status, content=payload.model_dump())
+
+
+def mdns_success(details: MDNSServiceDetails) -> MDNSInspectionResponse:
+    return MDNSInspectionResponse.model_validate({
+        "instance_name": details.instance_name,
+        "service_type": details.service_type,
+        "server": details.server,
+        "port": details.port,
+        "addresses": details.addresses,
+        "properties": details.properties,
+        "error": {},
+    })
+
+
+def ble_success(details: BLEDeviceDetails) -> BLEInspectionResponse:
+    return BLEInspectionResponse.model_validate({
+        "identifier": details.identifier,
+        "services": [
+            {
+                "uuid": service.uuid,
+                "characteristics": [
+                    {
+                        "uuid": characteristic.uuid,
+                        "properties": characteristic.properties,
+                        "descriptors": characteristic.descriptors,
+                    }
+                    for characteristic in service.characteristics
+                ],
+            }
+            for service in details.services
+        ],
+        "error": {},
+    })
