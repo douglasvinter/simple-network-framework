@@ -144,23 +144,27 @@ class BLEPlugin:
             {int(key): bytes.fromhex(value) for key, value in new["manufacturer_data"].items()},
             local_name=new["local_name"],
         )
-        new["company_names"] = {
-            key: company_name(int(key))
-            for key in new["manufacturer_data"]
-            if company_name(int(key)) is not None
-        }
-        new["service_data_names"] = {
-            uuid: details["name"]
-            for uuid in new["service_data"]
-            if (details := uuid_details(uuid, kind="service")) is not None
-        }
+        company_names: dict[str, str] = {}
+        for key in new["manufacturer_data"]:
+            resolved_name = company_name(int(key))
+            if resolved_name is not None:
+                company_names[key] = resolved_name
+        new["company_names"] = company_names
+
+        service_data_names: dict[str, str] = {}
+        for uuid in new["service_data"]:
+            details = uuid_details(uuid, kind="service")
+            if details is not None:
+                service_data_names[uuid] = details["name"]
+        new["service_data_names"] = service_data_names
         uuids = tuple(dict.fromkeys((*old["service_uuids"], *new["service_uuids"])))
         new["service_uuids"] = uuids
-        new["service_names"] = {
-            uuid: details["name"]
-            for uuid in uuids
-            if (details := uuid_details(uuid, kind="service")) is not None
-        }
+        service_names: dict[str, str] = {}
+        for uuid in uuids:
+            details = uuid_details(uuid, kind="service")
+            if details is not None:
+                service_names[uuid] = details["name"]
+        new["service_names"] = service_names
         services = tuple(
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
             for uuid in uuids
@@ -168,7 +172,7 @@ class BLEPlugin:
         name = new["local_name"] or (
             previous.name if previous.name != current.identifier else current.name
         )
-        return DiscoveryObservation(
+        observation = DiscoveryObservation(
             protocol=current.protocol,
             identifier=current.identifier,
             name=str(name),
@@ -176,6 +180,7 @@ class BLEPlugin:
             services=services,
             metadata=new,
         )
+        return observation
 
     def _enqueue(self, event: DiscoveryEvent) -> None:
         """Coalesce observations without losing removal/rediscovery transitions."""
