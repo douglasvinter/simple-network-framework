@@ -58,78 +58,100 @@ class BLEPlugin:
         self._running = False
 
     @staticmethod
+    def _encode_manufacturer_data(values: dict[int, bytes]) -> dict[str, str]:
+        encoded: dict[str, str] = {}
+        for company_id, value in values.items():
+            encoded[str(company_id)] = bytes(value).hex()
+        return encoded
+
+    @staticmethod
+    def _encode_service_data(values: dict[str, bytes]) -> dict[str, str]:
+        encoded: dict[str, str] = {}
+        for uuid, value in values.items():
+            encoded[str(uuid)] = bytes(value).hex()
+        return encoded
+
+    @staticmethod
+    def _company_names(manufacturer_data: dict[str, str]) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for company_id in manufacturer_data:
+            resolved_name = company_name(int(company_id))
+            if resolved_name is not None:
+                names[company_id] = resolved_name
+        return names
+
+    @staticmethod
+    def _service_names(uuids: tuple[str, ...]) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for uuid in uuids:
+            details = uuid_details(uuid, kind="service")
+            if details is not None:
+                names[uuid] = details["name"]
+        return names
+
+    @staticmethod
+    def _advertised_services(uuids: tuple[str, ...]) -> tuple[Service, ...]:
+        services: list[Service] = []
+        for uuid in uuids:
+            services.append(
+                Service(name=uuid, service_type="bluetooth-le-advertised-service")
+            )
+        return tuple(services)
+
+    @staticmethod
+    def _enrich_metadata(metadata: dict[str, Any]) -> None:
+        """Rebuild fields derived from the normalized advertisement evidence."""
+        manufacturer_data = cast(dict[str, str], metadata["manufacturer_data"])
+        service_data = cast(dict[str, str], metadata["service_data"])
+        service_uuids = cast(tuple[str, ...], metadata["service_uuids"])
+        local_name = cast(str | None, metadata["local_name"])
+
+        raw_manufacturer_data: dict[int, bytes] = {}
+        for company_id, value in manufacturer_data.items():
+            raw_manufacturer_data[int(company_id)] = bytes.fromhex(value)
+
+        metadata["device_identification"] = identify_ble_device(
+            raw_manufacturer_data, local_name=local_name
+        )
+        metadata["company_names"] = BLEPlugin._company_names(manufacturer_data)
+        metadata["service_names"] = BLEPlugin._service_names(service_uuids)
+        metadata["service_data_names"] = BLEPlugin._service_names(tuple(service_data))
+
+    @staticmethod
     def _to_device(device: _Addressable, advertisement_data: object) -> DiscoveryObservation:
-        """Normalize Bleak's public BLEDevice and AdvertisementData objects."""
+        """Normalize a BLE advertisement into a discovery observation."""
         address = str(device.address)
         advertised_name = getattr(advertisement_data, "local_name", None)
         name = advertised_name or getattr(device, "name", None) or address
-        rssi = getattr(advertisement_data, "rssi", None)
-        tx_power = getattr(advertisement_data, "tx_power", None)
+        raw_manufacturer_data = getattr(advertisement_data, "manufacturer_data", {}) or {}
+        raw_service_data = getattr(advertisement_data, "service_data", {}) or {}
         service_uuids = tuple(getattr(advertisement_data, "service_uuids", ()) or ())
-        manufacturer_data = {
-            str(company_id): bytes(value).hex()
-            for company_id, value in (
-                getattr(advertisement_data, "manufacturer_data", {}) or {}
-            ).items()
-        }
-        service_data = {
-            str(uuid): bytes(value).hex()
-            for uuid, value in (getattr(advertisement_data, "service_data", {}) or {}).items()
-        }
-        identification = identify_ble_device(
-            dict(getattr(advertisement_data, "manufacturer_data", {}) or {}),
-            local_name=advertised_name,
-        )
-        endpoint = Endpoint("ble", address)
-        services = tuple(
-            Service(name=uuid, service_type="bluetooth-le-advertised-service")
-            for uuid in service_uuids
-        )
-        company_names: dict[str, str] = {}
-        for key in manufacturer_data:
-            resolved_name = company_name(int(key))
-            if resolved_name is not None:
-                company_names[key] = resolved_name
 
-        service_names: dict[str, str] = {}
-        for uuid in service_uuids:
-            details = uuid_details(uuid, kind="service")
-            if details is not None:
-                service_names[uuid] = details["name"]
-
-        service_data_names: dict[str, str] = {}
-        for uuid in service_data:
-            details = uuid_details(uuid, kind="service")
-            if details is not None:
-                service_data_names[uuid] = details["name"]
-        metadata = {
-            "rssi": rssi,
-            "tx_power": tx_power,
+        metadata: dict[str, Any] = {
+            "rssi": getattr(advertisement_data, "rssi", None),
+            "tx_power": getattr(advertisement_data, "tx_power", None),
             "local_name": advertised_name,
-            "device_identification": identification,
             "service_uuids": service_uuids,
-            "manufacturer_data": manufacturer_data,
-            "company_names": company_names,
-            "service_names": service_names,
-            "service_data_names": service_data_names,
-            "service_data": service_data,
+            "manufacturer_data": BLEPlugin._encode_manufacturer_data(raw_manufacturer_data),
+            "service_data": BLEPlugin._encode_service_data(raw_service_data),
         }
-        observation = DiscoveryObservation(
+        BLEPlugin._enrich_metadata(metadata)
+
+        return DiscoveryObservation(
             protocol="ble",
             identifier=address,
             name=str(name),
-            endpoints=(endpoint,),
-            services=services,
+            endpoints=(Endpoint("ble", address),),
+            services=BLEPlugin._advertised_services(service_uuids),
             metadata=metadata,
         )
-        return observation
 
     @staticmethod
     def _reconcile(
         previous: DiscoveryObservation | None,
         current: DiscoveryObservation,
     ) -> DiscoveryObservation:
-        """Keep last observed fields when a partial advertisement omits them."""
+        """Preserve previously observed evidence absent from partial advertisements."""
         if previous is None:
             return current
 
@@ -140,52 +162,17 @@ class BLEPlugin:
             if new[field] is None:
                 new[field] = old.get(field)
 
-        old_manufacturer_data = cast(dict[str, str], old.get("manufacturer_data", {}))
-        current_manufacturer_data = cast(dict[str, str], new["manufacturer_data"])
-        manufacturer_data = {**old_manufacturer_data, **current_manufacturer_data}
-        new["manufacturer_data"] = manufacturer_data
-
-        old_service_data = cast(dict[str, str], old.get("service_data", {}))
-        current_service_data = cast(dict[str, str], new["service_data"])
-        service_data = {**old_service_data, **current_service_data}
-        new["service_data"] = service_data
-
-        local_name = cast(str | None, new["local_name"])
-        raw_manufacturer_data: dict[int, bytes] = {}
-        for key, value in manufacturer_data.items():
-            raw_manufacturer_data[int(key)] = bytes.fromhex(value)
-        new["device_identification"] = identify_ble_device(
-            raw_manufacturer_data, local_name=local_name
-        )
-
-        company_names: dict[str, str] = {}
-        for key in manufacturer_data:
-            resolved_name = company_name(int(key))
-            if resolved_name is not None:
-                company_names[key] = resolved_name
-        new["company_names"] = company_names
-
-        service_data_names: dict[str, str] = {}
-        for uuid in service_data:
-            details = uuid_details(uuid, kind="service")
-            if details is not None:
-                service_data_names[uuid] = details["name"]
-        new["service_data_names"] = service_data_names
+        for field in ("manufacturer_data", "service_data"):
+            previous_values = cast(dict[str, str], old.get(field, {}))
+            current_values = cast(dict[str, str], new[field])
+            new[field] = {**previous_values, **current_values}
 
         old_uuids = cast(tuple[str, ...], old["service_uuids"])
         current_uuids = cast(tuple[str, ...], new["service_uuids"])
-        uuids = tuple(dict.fromkeys((*old_uuids, *current_uuids)))
-        new["service_uuids"] = uuids
-        service_names: dict[str, str] = {}
-        for uuid in uuids:
-            details = uuid_details(uuid, kind="service")
-            if details is not None:
-                service_names[uuid] = details["name"]
-        new["service_names"] = service_names
-        services = tuple(
-            Service(name=uuid, service_type="bluetooth-le-advertised-service")
-            for uuid in uuids
-        )
+        service_uuids = tuple(dict.fromkeys((*old_uuids, *current_uuids)))
+        new["service_uuids"] = service_uuids
+        BLEPlugin._enrich_metadata(new)
+
         name = new["local_name"] or (
             previous.name if previous.name != current.identifier else current.name
         )
@@ -194,7 +181,7 @@ class BLEPlugin:
             identifier=current.identifier,
             name=str(name),
             endpoints=current.endpoints,
-            services=services,
+            services=BLEPlugin._advertised_services(service_uuids),
             metadata=new,
         )
 
