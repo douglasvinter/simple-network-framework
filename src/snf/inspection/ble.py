@@ -85,7 +85,8 @@ class BLEInspector:
             )
         if not observation.identifier.strip():
             raise BLEInspectionError(
-                "Observation has no BLE identifier", code=InspectionErrorCode.INVALID_OBSERVATION.get_code()
+                "Observation has no BLE identifier",
+                code=InspectionErrorCode.INVALID_OBSERVATION.get_code()
             )
         try:
             from bleak import BleakClient
@@ -102,6 +103,7 @@ class BLEInspector:
         except (BleakError, OSError, TimeoutError) as exc:
             _LOGGER.exception("BLE GATT inspection failed for %s", observation.identifier)
             raise BLEInspectionError(
-                "BLE GATT service enumeration failed", code=InspectionErrorCode.CONNECTION_FAILED.get_code()
+                "BLE GATT service enumeration failed",
+                code=InspectionErrorCode.CONNECTION_FAILED.get_code()
             ) from exc
         return BLEDeviceDetails(identifier=observation.identifier, services=services)
