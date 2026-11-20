@@ -249,7 +249,7 @@ async def test_engine_snapshot_filters_protocol_and_preserves_devices_property()
         assert engine.snapshot() == engine.observations == (mdns, ssdp)
         assert engine.snapshot(protocol="mdns") == (mdns,)
         assert engine.snapshot(protocol="ssdp") == (ssdp,)
-        assert engine.snapshot(protocol="slp") == ()
+        assert engine.snapshot(protocol="custom") == ()
 
 
 def test_registry_eviction_is_not_device_removal():
