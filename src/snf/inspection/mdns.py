@@ -44,13 +44,15 @@ class MDNSMetadataParser:
     def parse(self, observation: DiscoveryObservation) -> tuple[str, str]:
         if observation.protocol != MDNS_PROTOCOL:
             raise MDNSInspectionError(
-                "Only mDNS observations can be inspected", code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
+                "Only mDNS observations can be inspected",
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL
             )
         for service in observation.services:
             if service.service_type and service.name:
                 return service.service_type, service.name
         raise MDNSInspectionError(
-            "Observation has no DNS-SD service instance", code=InspectionErrorCode.INVALID_OBSERVATION
+            "Observation has no DNS-SD service instance",
+            code=InspectionErrorCode.INVALID_OBSERVATION
         )
 
     def details(self, service_type: str, name: str, info: Any) -> MDNSServiceDetails:
@@ -83,7 +85,8 @@ class MDNSInspector:
             from zeroconf.asyncio import AsyncZeroconf
         except ImportError as exc:
             raise MDNSInspectionError(
-                "Install mDNS support with the mdns extra", code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
+                "Install mDNS support with the mdns extra",
+                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE
             ) from exc
 
         try:
@@ -100,6 +103,7 @@ class MDNSInspector:
             ) from exc
         if info is None:
             raise MDNSInspectionError(
-                "mDNS service instance did not resolve", code=InspectionErrorCode.SERVICE_UNAVAILABLE
+                "mDNS service instance did not resolve",
+                code=InspectionErrorCode.SERVICE_UNAVAILABLE
             )
         return self._parser.details(service_type, name, info)
