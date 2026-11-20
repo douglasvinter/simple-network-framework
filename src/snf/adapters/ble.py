@@ -85,21 +85,23 @@ class BLEPlugin:
             Service(name=uuid, service_type="bluetooth-le-advertised-service")
             for uuid in service_uuids
         )
-        company_names = {
-            key: name
-            for key in manufacturer_data
-            if (name := company_name(int(key))) is not None
-        }
-        service_names = {
-            uuid: details["name"]
-            for uuid in service_uuids
-            if (details := uuid_details(uuid, kind="service")) is not None
-        }
-        service_data_names = {
-            uuid: details["name"]
-            for uuid in service_data
-            if (details := uuid_details(uuid, kind="service")) is not None
-        }
+        company_names: dict[str, str] = {}
+        for key in manufacturer_data:
+            name = company_name(int(key))
+            if name is not None:
+                company_names[key] = name
+
+        service_names: dict[str, str] = {}
+        for uuid in service_uuids:
+            details = uuid_details(uuid, kind="service")
+            if details is not None:
+                service_names[uuid] = details["name"]
+
+        service_data_names: dict[str, str] = {}
+        for uuid in service_data:
+            details = uuid_details(uuid, kind="service")
+            if details is not None:
+                service_data_names[uuid] = details["name"]
         metadata = {
             "rssi": rssi,
             "tx_power": tx_power,
