@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from snf.bluetooth.assigned_numbers import uuid_details
 from snf.inspection.error_codes import InspectionErrorCode
@@ -49,8 +50,6 @@ class BLEDeviceDetails:
 
 def _service_details(service: object) -> BLEServiceDetails:
     """Project one Bleak service into immutable metadata without GATT reads."""
-    from typing import Any
-
     item: Any = service
     return BLEServiceDetails(
         uuid=str(item.uuid),
