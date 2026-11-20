@@ -103,21 +103,27 @@ def mdns_success(details: MDNSServiceDetails) -> MDNSInspectionResponse:
 
 
 def ble_success(details: BLEDeviceDetails) -> BLEInspectionResponse:
-    return BLEInspectionResponse.model_validate({
-        "identifier": details.identifier,
-        "services": [
-            {
-                "uuid": service.uuid,
-                "characteristics": [
-                    {
-                        "uuid": characteristic.uuid,
-                        "properties": characteristic.properties,
-                        "descriptors": characteristic.descriptors,
-                    }
-                    for characteristic in service.characteristics
-                ],
+    services: list[dict[str, object]] = []
+
+    for service in details.services:
+        characteristics: list[dict[str, object]] = []
+        for characteristic in service.characteristics:
+            characteristic_payload = {
+                "uuid": characteristic.uuid,
+                "properties": characteristic.properties,
+                "descriptors": characteristic.descriptors,
             }
-            for service in details.services
-        ],
+            characteristics.append(characteristic_payload)
+
+        service_payload = {
+            "uuid": service.uuid,
+            "characteristics": characteristics,
+        }
+        services.append(service_payload)
+
+    payload = {
+        "identifier": details.identifier,
+        "services": services,
         "error": {},
-    })
+    }
+    return BLEInspectionResponse.model_validate(payload)
