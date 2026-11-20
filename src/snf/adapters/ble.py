@@ -7,7 +7,7 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 from importlib.util import find_spec
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
 from snf.bluetooth.assigned_numbers import company_name, uuid_details
 from snf.bluetooth.fingerprints import identify_ble_device
@@ -135,31 +135,46 @@ class BLEPlugin:
 
         old = dict(previous.metadata)
         new = dict(current.metadata)
+
         for field in ("local_name", "tx_power"):
             if new[field] is None:
                 new[field] = old.get(field)
-        for field in ("manufacturer_data", "service_data"):
-            new[field] = {**old.get(field, {}), **new[field]}
 
-        # Derived metadata is recalculated only for fields affected by merging.
+        old_manufacturer_data = cast(dict[str, str], old.get("manufacturer_data", {}))
+        current_manufacturer_data = cast(dict[str, str], new["manufacturer_data"])
+        manufacturer_data = {**old_manufacturer_data, **current_manufacturer_data}
+        new["manufacturer_data"] = manufacturer_data
+
+        old_service_data = cast(dict[str, str], old.get("service_data", {}))
+        current_service_data = cast(dict[str, str], new["service_data"])
+        service_data = {**old_service_data, **current_service_data}
+        new["service_data"] = service_data
+
+        local_name = cast(str | None, new["local_name"])
+        raw_manufacturer_data: dict[int, bytes] = {}
+        for key, value in manufacturer_data.items():
+            raw_manufacturer_data[int(key)] = bytes.fromhex(value)
         new["device_identification"] = identify_ble_device(
-            {int(key): bytes.fromhex(value) for key, value in new["manufacturer_data"].items()},
-            local_name=new["local_name"],
+            raw_manufacturer_data, local_name=local_name
         )
+
         company_names: dict[str, str] = {}
-        for key in new["manufacturer_data"]:
+        for key in manufacturer_data:
             resolved_name = company_name(int(key))
             if resolved_name is not None:
                 company_names[key] = resolved_name
         new["company_names"] = company_names
 
         service_data_names: dict[str, str] = {}
-        for uuid in new["service_data"]:
+        for uuid in service_data:
             details = uuid_details(uuid, kind="service")
             if details is not None:
                 service_data_names[uuid] = details["name"]
         new["service_data_names"] = service_data_names
-        uuids = tuple(dict.fromkeys((*old["service_uuids"], *new["service_uuids"])))
+
+        old_uuids = cast(tuple[str, ...], old["service_uuids"])
+        current_uuids = cast(tuple[str, ...], new["service_uuids"])
+        uuids = tuple(dict.fromkeys((*old_uuids, *current_uuids)))
         new["service_uuids"] = uuids
         service_names: dict[str, str] = {}
         for uuid in uuids:
