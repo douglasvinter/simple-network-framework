@@ -22,6 +22,7 @@ from snf.inspection.constants import (
     SSDP_PROTOCOL,
 )
 from snf.inspection.xml import child_text, children, local_name
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.models import DiscoveryObservation
 
 
@@ -29,7 +30,7 @@ class UPnPInspectionError(ValueError):
     """Failed inspection with a stable code and optional bounded response."""
 
     def __init__(
-        self, message: str, *, code: str = "INSPECTION_FAILED",
+        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED,
         raw_response: str | None = None,
     ) -> None:
         super().__init__(message)
@@ -110,22 +111,22 @@ def parse_description(
         if not xml.lstrip().startswith(b"<"):
             raise UPnPInspectionError(
                 "Endpoint did not return a UPnP XML description",
-                code="UNSUPPORTED_DESCRIPTION_FORMAT",
+                code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT,
                 raw_response=xml.decode("utf-8", errors="replace"),
             ) from exc
         raise UPnPInspectionError(
-            "Malformed UPnP description XML", code="MALFORMED_DESCRIPTION",
+            "Malformed UPnP description XML", code=InspectionErrorCode.MALFORMED_DESCRIPTION,
             raw_response=xml.decode("utf-8", errors="replace"),
         ) from exc
     if local_name(root.tag) != "root":
         raise UPnPInspectionError(
-            "Not a UPnP root description", code="UNSUPPORTED_DESCRIPTION_FORMAT",
+            "Not a UPnP root description", code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT,
             raw_response=xml.decode("utf-8", errors="replace"),
         )
     device = next(iter(children(root, "device")), None)
     if device is None:
         raise UPnPInspectionError(
-            "Missing UPnP root device", code="UNSUPPORTED_DESCRIPTION_FORMAT",
+            "Missing UPnP root device", code=InspectionErrorCode.UNSUPPORTED_DESCRIPTION_FORMAT,
             raw_response=xml.decode("utf-8", errors="replace"),
         )
     return _device(device, location, 0, max_depth)
@@ -186,7 +187,7 @@ def _source_addresses(observation: DiscoveryObservation) -> frozenset[str]:
     if not addresses:
         raise UPnPInspectionError(
             "SSDP observation has no eligible source IP address",
-            code="SOURCE_ADDRESS_UNAVAILABLE",
+            code=InspectionErrorCode.SOURCE_ADDRESS_UNAVAILABLE,
         )
     return frozenset(addresses)
 
@@ -229,7 +230,7 @@ class UPnPInspector:
         if any(not addresses for addresses in locations.values()):
             raise UPnPInspectionError(
                 "Conflicting SSDP source addresses for a shared LOCATION",
-                code="SOURCE_ADDRESS_MISMATCH",
+                code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH,
             )
         results = await asyncio.gather(*(
             self.inspect(location, expected_addresses=frozenset(addresses))
@@ -259,7 +260,7 @@ class UPnPInspector:
                     ):
                         raise UPnPInspectionError(
                             "LOCATION address does not match the SSDP source address",
-                            code="SOURCE_ADDRESS_MISMATCH",
+                            code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH,
                         )
                     connector = aiohttp.TCPConnector(
                         resolver=_PinnedResolver(infos), use_dns_cache=False
@@ -278,18 +279,18 @@ class UPnPInspector:
                             ):
                                 raise UPnPInspectionError(
                                     "Description exceeds byte limit",
-                                    code="RESPONSE_TOO_LARGE",
+                                    code=InspectionErrorCode.RESPONSE_TOO_LARGE,
                                 )
                             content = await response.content.read(self.max_bytes + 1)
                             if len(content) > self.max_bytes:
                                 raise UPnPInspectionError(
                                     "Description exceeds byte limit",
-                                    code="RESPONSE_TOO_LARGE",
+                                    code=InspectionErrorCode.RESPONSE_TOO_LARGE,
                                 )
                             return parse_description(content, location, max_depth=self.max_depth)
             except (TimeoutError, OSError, aiohttp.ClientError) as exc:
                 raise UPnPInspectionError(
-                    "UPnP description fetch failed", code="FETCH_FAILED"
+                    "UPnP description fetch failed", code=InspectionErrorCode.FETCH_FAILED
                 ) from exc
 
 
