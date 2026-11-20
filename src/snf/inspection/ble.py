@@ -79,11 +79,12 @@ def _service_details(service: BleakGATTService) -> BLEServiceDetails:
         )
         characteristics.append(details)
 
-    return BLEServiceDetails(
+    service_details = BLEServiceDetails(
         uuid=service_uuid,
         name=service_name,
         characteristics=tuple(characteristics),
     )
+    return service_details
 
 
 class BLEInspector:
