@@ -100,7 +100,10 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         """Explicit, read-only inspection of a discovered SSDP advertisement."""
 
         if identifier is None or not identifier.strip():
-            return upnp_failure(422, InspectionErrorCode.INVALID_IDENTIFIER, "An SSDP identifier is required")
+            return upnp_failure(
+                422, InspectionErrorCode.INVALID_IDENTIFIER,
+                "An SSDP identifier is required"
+            )
         try:
             runtime.validate_protocol("ssdp")
         except ValueError as exc:
@@ -111,7 +114,10 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             return upnp_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE, str(exc))
         observation = runtime.get("ssdp", identifier)
         if observation is None:
-            return upnp_failure(404, InspectionErrorCode.OBSERVATION_NOT_FOUND, "SSDP observation not found")
+            return upnp_failure(
+                404, InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                "SSDP observation not found"
+            )
         try:
             device = await runtime.inspect("ssdp", identifier)
             return InspectionSuccessResponse.model_validate({
@@ -138,7 +144,10 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         """Resolve one existing DNS-SD observation without changing discovery state."""
 
         if identifier is None or not identifier.strip():
-            return mdns_failure(422, InspectionErrorCode.INVALID_IDENTIFIER, "An mDNS identifier is required")
+            return mdns_failure(
+                422, InspectionErrorCode.INVALID_IDENTIFIER,
+                "An mDNS identifier is required"
+            )
         try:
             runtime.validate_protocol("mdns")
         except ValueError as exc:
@@ -149,7 +158,10 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             return mdns_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE, str(exc))
         observation = runtime.get("mdns", identifier)
         if observation is None:
-            return mdns_failure(404, InspectionErrorCode.OBSERVATION_NOT_FOUND, "mDNS observation not found")
+            return mdns_failure(
+                404, InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                "mDNS observation not found"
+            )
         try:
             details = await runtime.inspect("mdns", identifier)
         except MDNSInspectionError as exc:
@@ -171,7 +183,10 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
         """Explicitly connect to enumerate GATT metadata without reading values."""
 
         if identifier is None or not identifier.strip():
-            return ble_failure(422, InspectionErrorCode.INVALID_IDENTIFIER, "A BLE identifier is required")
+            return ble_failure(
+                422, InspectionErrorCode.INVALID_IDENTIFIER,
+                "A BLE identifier is required"
+            )
         try:
             runtime.validate_protocol("ble")
         except ValueError as exc:
@@ -182,7 +197,10 @@ def create_router(runtime: NetworkRuntime) -> APIRouter:
             return ble_failure(503, InspectionErrorCode.RUNTIME_UNAVAILABLE, str(exc))
         observation = runtime.get("ble", identifier)
         if observation is None:
-            return ble_failure(404, InspectionErrorCode.OBSERVATION_NOT_FOUND, "BLE observation not found")
+            return ble_failure(
+                404, InspectionErrorCode.OBSERVATION_NOT_FOUND,
+                "BLE observation not found"
+            )
         try:
             details = await runtime.inspect("ble", identifier)
         except BLEInspectionError as exc:
