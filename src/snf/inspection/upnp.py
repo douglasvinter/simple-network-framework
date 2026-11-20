@@ -192,6 +192,25 @@ def _source_addresses(observation: DiscoveryObservation) -> frozenset[str]:
     return frozenset(addresses)
 
 
+def _validate_resolved_addresses(
+    addresses: set[str], expected_addresses: frozenset[str] | None
+) -> set[str]:
+    """Enforce local-only DNS answers and bind them to SSDP source evidence."""
+    if not addresses or not all(_local_address(ip) for ip in addresses):
+        raise UPnPInspectionError(
+            "LOCATION must resolve exclusively to private LAN addresses"
+        )
+    normalized = {str(ipaddress.ip_address(ip)) for ip in addresses}
+    if expected_addresses is not None and (
+        not expected_addresses or not normalized.issubset(expected_addresses)
+    ):
+        raise UPnPInspectionError(
+            "LOCATION address does not match the SSDP source address",
+            code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH,
+        )
+    return normalized
+
+
 class UPnPInspector:
     """Fetch bounded local UPnP XML; never invoke advertised actions."""
 
@@ -249,19 +268,9 @@ class UPnPInspector:
                     # Resolve and pin a vetted address to prevent DNS rebinding.
                     infos = await asyncio.get_running_loop().getaddrinfo(
                         host, port, type=socket.SOCK_STREAM)
-                    addresses = {item[4][0] for item in infos}
-                    if not addresses or not all(_local_address(ip) for ip in addresses):
-                        raise UPnPInspectionError(
-                            "LOCATION must resolve exclusively to private LAN addresses"
-                        )
-                    normalized = {str(ipaddress.ip_address(ip)) for ip in addresses}
-                    if expected_addresses is not None and (
-                        not expected_addresses or not normalized.issubset(expected_addresses)
-                    ):
-                        raise UPnPInspectionError(
-                            "LOCATION address does not match the SSDP source address",
-                            code=InspectionErrorCode.SOURCE_ADDRESS_MISMATCH,
-                        )
+                    _validate_resolved_addresses(
+                        {item[4][0] for item in infos}, expected_addresses
+                    )
                     connector = aiohttp.TCPConnector(
                         resolver=_PinnedResolver(infos), use_dns_cache=False
                     )
