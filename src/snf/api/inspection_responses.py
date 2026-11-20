@@ -11,7 +11,9 @@ from snf.api.schemas import (
     BLEInspectionErrorResponse,
     InspectionErrorResponse,
     MDNSInspectionErrorResponse,
+    UPnPDeviceResponse,
 )
+from snf.inspection.ssdp_metadata import SSDPMetadataParser
 from snf.models import DiscoveryObservation
 
 
@@ -35,6 +37,20 @@ def ble_error_status(code: str) -> int:
     return mdns_error_status(code)
 
 
+def _advertised_device(observation: DiscoveryObservation) -> UPnPDeviceResponse:
+    metadata = SSDPMetadataParser().parse(observation)
+    return UPnPDeviceResponse(
+        udn=metadata.udn,
+        device_type=metadata.device_type,
+        friendly_name=metadata.friendly_name,
+        manufacturer=None,
+        model_name=None,
+        model_number=None,
+        services=(),
+        embedded_devices=(),
+    )
+
+
 def upnp_failure(
     status: int,
     code: str,
@@ -43,10 +59,6 @@ def upnp_failure(
     observation: DiscoveryObservation | None = None,
     raw_response: str | None = None,
 ) -> JSONResponse:
-    # Imported lazily to keep the existing advertised-device translation in
-    # the router until its response contract is characterized separately.
-    from snf.api.router import _advertised_device
-
     return JSONResponse(
         status_code=status,
         content=InspectionErrorResponse(
