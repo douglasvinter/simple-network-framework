@@ -18,6 +18,9 @@ from snf.api.inspection_responses import (
     upnp_failure,
 )
 from snf.api.schemas import (
+    BLEInspectionErrorResponse,
+    InspectionErrorResponse,
+    MDNSInspectionErrorResponse,
     BLEInspectionResponse,
     DiscoveryObservationResponse,
     InspectionSuccessResponse,
