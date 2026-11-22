@@ -51,11 +51,13 @@ def _observation_from_service_info(
     identifier = f"{service_type}|{name}"
     properties = _decode_properties(info.properties)
     endpoints = tuple(Endpoint("ip", address, info.port) for address in addresses)
+    metadata = {"server": info.server, "properties": properties}
+
     service = Service(
         name=name,
         service_type=service_type,
         endpoints=endpoints,
-        metadata={"server": info.server, "properties": properties},
+        metadata=metadata,
     )
     return DiscoveryObservation(
         protocol=protocol,
@@ -63,7 +65,7 @@ def _observation_from_service_info(
         name=name,
         endpoints=endpoints,
         services=(service,),
-        metadata={"server": info.server, "properties": properties},
+        metadata=metadata.copy(),
     )
 
 
