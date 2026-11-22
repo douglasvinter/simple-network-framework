@@ -43,8 +43,13 @@ def zeroconf_stubs(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "zeroconf", module)
     monkeypatch.setitem(sys.modules, "zeroconf.asyncio", async_module)
-    return SimpleNamespace(instance=instance, factory=factory, browser=browser,
-                           browser_factory=browser_factory, discover=discover)
+    return SimpleNamespace(
+        instance=instance,
+        factory=factory,
+        browser=browser,
+        browser_factory=browser_factory,
+        discover=discover,
+    )
 
 
 def plugin_without_dependency_check(service_types=None):
@@ -61,8 +66,8 @@ def plugin_without_dependency_check(service_types=None):
 
 
 def test_txt_decoding_preserves_replacement_and_empty_values():
-    assert _decode_properties({b"name": b"TV", b"invalid": b"\\xff", "empty": None, 3: 7}) == {
-        "name": "TV", "invalid": "\\ufffd", "empty": "", "3": "7",
+    assert _decode_properties({b"name": b"TV", b"invalid": bytes([255]), "empty": None, 3: 7}) == {
+        "name": "TV", "invalid": "�", "empty": "", "3": "7",
     }
 
 
