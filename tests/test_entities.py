@@ -50,7 +50,10 @@ def test_missing_evidence_and_empty_snapshot():
     resolver = EntityResolver()
     assert resolver.resolve(()) == ()
     entities = resolver.resolve(
-        (DiscoveryObservation("custom", "one", "Device"), DiscoveryObservation("custom", "two", "Device"))
+        (
+            DiscoveryObservation("custom", "one", "Device"),
+            DiscoveryObservation("custom", "two", "Device"),
+        )
     )
     assert len(entities) == 2
     assert all(entity.identity_source == "observation" for entity in entities)

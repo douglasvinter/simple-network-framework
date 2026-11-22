@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.models import DiscoveryObservation
 
 DEFAULT_RESOLVE_TIMEOUT_MS = 3000
@@ -14,7 +15,9 @@ MDNS_PROTOCOL = "mdns"
 class MDNSInspectionError(ValueError):
     """Stable inspection error suitable for API mapping."""
 
-    def __init__(self, message: str, *, code: str = "INSPECTION_FAILED") -> None:
+    def __init__(
+        self, message: str, *, code: str = InspectionErrorCode.INSPECTION_FAILED.get_code()
+    ) -> None:
         super().__init__(message)
         self.code = code
 
@@ -41,13 +44,15 @@ class MDNSMetadataParser:
     def parse(self, observation: DiscoveryObservation) -> tuple[str, str]:
         if observation.protocol != MDNS_PROTOCOL:
             raise MDNSInspectionError(
-                "Only mDNS observations can be inspected", code="UNSUPPORTED_PROTOCOL"
+                "Only mDNS observations can be inspected",
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code()
             )
         for service in observation.services:
             if service.service_type and service.name:
                 return service.service_type, service.name
         raise MDNSInspectionError(
-            "Observation has no DNS-SD service instance", code="INVALID_OBSERVATION"
+            "Observation has no DNS-SD service instance",
+            code=InspectionErrorCode.INVALID_OBSERVATION.get_code()
         )
 
     def details(self, service_type: str, name: str, info: Any) -> MDNSServiceDetails:
@@ -80,7 +85,8 @@ class MDNSInspector:
             from zeroconf.asyncio import AsyncZeroconf
         except ImportError as exc:
             raise MDNSInspectionError(
-                "Install mDNS support with the mdns extra", code="DEPENDENCY_UNAVAILABLE"
+                "Install mDNS support with the mdns extra",
+                code=InspectionErrorCode.DEPENDENCY_UNAVAILABLE.get_code()
             ) from exc
 
         try:
@@ -93,10 +99,12 @@ class MDNSInspector:
                 await zeroconf.async_close()
         except (OSError, TimeoutError) as exc:
             raise MDNSInspectionError(
-                "mDNS service resolution failed", code="RESOLUTION_FAILED"
+                "mDNS service resolution failed",
+                code=InspectionErrorCode.RESOLUTION_FAILED.get_code()
             ) from exc
         if info is None:
             raise MDNSInspectionError(
-                "mDNS service instance did not resolve", code="SERVICE_UNAVAILABLE"
+                "mDNS service instance did not resolve",
+                code=InspectionErrorCode.SERVICE_UNAVAILABLE.get_code()
             )
         return self._parser.details(service_type, name, info)

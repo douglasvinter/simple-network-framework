@@ -8,14 +8,14 @@ A company identifier identifies the data namespace, not necessarily a device's b
 from __future__ import annotations
 
 import json
-from functools import lru_cache
+from functools import cache
 from importlib.resources import files
 from typing import Any
 
 _BASE_UUID_SUFFIX = "-0000-1000-8000-00805f9b34fb"
 
 
-@lru_cache(maxsize=None)
+@cache
 def _entries(filename: str) -> list[dict[str, Any]]:
     resource = files("snf").joinpath("bluetooth", "data", filename)
     with resource.open("r", encoding="utf-8") as handle:
@@ -23,12 +23,12 @@ def _entries(filename: str) -> list[dict[str, Any]]:
     return result
 
 
-@lru_cache(maxsize=None)
+@cache
 def _companies() -> dict[int, str]:
     return {int(item["code"]): str(item["name"]) for item in _entries("company_ids.json")}
 
 
-@lru_cache(maxsize=None)
+@cache
 def _uuids(kind: str) -> dict[str, dict[str, str]]:
     filename = {
         "service": "service_uuids.json",

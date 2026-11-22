@@ -6,13 +6,14 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterable
 from contextlib import suppress
-from typing import Literal, Self, overload
+from typing import Literal, Self, cast, overload
 
 from snf.engine import DiscoveryEngine
+from snf.entities import EntityResolver, NetworkEntity
 from snf.inspection.ble import BLEDeviceDetails, BLEInspector
+from snf.inspection.error_codes import InspectionErrorCode
 from snf.inspection.mdns import MDNSInspector, MDNSServiceDetails
 from snf.inspection.upnp import UPnPDevice, UPnPInspector
-from snf.entities import EntityResolver, NetworkEntity
 from snf.models import DiscoveryEvent, DiscoveryObservation
 from snf.plugins import DiscoveryPlugin, create_plugins
 from snf.storage import InMemoryStorage, ObservationStorage
@@ -27,8 +28,6 @@ class InspectionLookupError(ValueError):
     def __init__(self, message: str, *, code: str) -> None:
         super().__init__(message)
         self.code = code
-
-
 
 
 class DiscoverySubscription:
@@ -59,8 +58,7 @@ class DiscoverySubscription:
                 event = await self._queue.get()
                 if event is _CLOSED:
                     return
-                assert isinstance(event, DiscoveryEvent)
-                yield event
+                yield cast(DiscoveryEvent, event)
         finally:
             self.close()
 
@@ -142,19 +140,19 @@ class NetworkRuntime:
         if not identifier or not identifier.strip():
             raise InspectionLookupError(
                 f"An inspection identifier is required for {protocol}",
-                code="INVALID_IDENTIFIER",
+                code=InspectionErrorCode.INVALID_IDENTIFIER.get_code(),
             )
         self.validate_protocol(protocol)
         if protocol not in ("ssdp", "mdns", "ble"):
             raise InspectionLookupError(
                 f"Inspection is not supported for protocol {protocol!r}",
-                code="UNSUPPORTED_PROTOCOL",
+                code=InspectionErrorCode.UNSUPPORTED_PROTOCOL.get_code(),
             )
         observation = self.get(protocol, identifier)
         if observation is None:
             raise InspectionLookupError(
                 f"{protocol.upper()} observation not found",
-                code="OBSERVATION_NOT_FOUND",
+                code=InspectionErrorCode.OBSERVATION_NOT_FOUND.get_code(),
             )
         if protocol == "ssdp":
             return await UPnPInspector().inspect_observation(observation)
