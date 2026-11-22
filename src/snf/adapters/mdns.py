@@ -28,11 +28,10 @@ def _decode_properties(properties: dict[Any, Any]) -> dict[str, str]:
     decoded: dict[str, str] = {}
 
     for key, value in properties.items():
-        decoded_key = (
-            key.decode("utf-8", errors="replace")
-            if isinstance(key, bytes)
-            else str(key)
-        )
+        if isinstance(key, bytes):
+            decoded_key = key.decode("utf-8", errors="replace")
+        else:
+            decoded_key = str(key)
         if isinstance(value, bytes):
             decoded_value = value.decode("utf-8", errors="replace")
         elif value is None:
@@ -58,7 +57,7 @@ def _observation_from_service_info(
         endpoints=endpoints,
         metadata={"server": info.server, "properties": properties},
     )
-    observation = DiscoveryObservation(
+    return DiscoveryObservation(
         protocol=protocol,
         identifier=identifier,
         name=name,
@@ -66,11 +65,13 @@ def _observation_from_service_info(
         services=(service,),
         metadata={"server": info.server, "properties": properties},
     )
-    return observation
 
 
 class MDNSPlugin:
-    """Browse and resolve DNS-SD service instances."""
+    """Browse DNS-SD service instances and publish resolved observations.
+
+    Service types can be configured explicitly or discovered at startup.
+    """
 
     name = "mdns"
 
@@ -95,27 +96,25 @@ class MDNSPlugin:
         self._browsers: list[Any] = []
         self._loop: asyncio.AbstractEventLoop | None = None
 
-    async def start(self) -> None:
-        from zeroconf import InterfaceChoice
-        from zeroconf.asyncio import (
-            AsyncServiceBrowser,
-            AsyncZeroconf,
-            AsyncZeroconfServiceTypes,
+    async def _service_types_to_browse(self) -> list[str]:
+        """Return configured service types, or discover them through Zeroconf."""
+        from zeroconf.asyncio import AsyncZeroconfServiceTypes
+
+        if self.service_types is not None:
+            return self.service_types
+
+        return list(
+            await AsyncZeroconfServiceTypes.async_find(
+                aiozc=self._zeroconf,
+                timeout=self.type_discovery_timeout,
+            )
         )
 
-        self._events = asyncio.Queue()
-        self._loop = asyncio.get_running_loop()
-        interfaces = self.interfaces if self.interfaces is not None else InterfaceChoice.All
-        self._zeroconf = AsyncZeroconf(interfaces=interfaces)
-        types = self.service_types
-        if types is None:
-            types = list(
-                await AsyncZeroconfServiceTypes.async_find(
-                    aiozc=self._zeroconf, timeout=self.type_discovery_timeout
-                )
-            )
-        _LOGGER.debug("Discovered %d mDNS service types: %s", len(types), types)
-        for service_type in types:
+    def _register_browsers(self, service_types: list[str]) -> None:
+        """Register the discovery callback for each selected service type."""
+        from zeroconf.asyncio import AsyncServiceBrowser
+
+        for service_type in service_types:
             self._browsers.append(
                 AsyncServiceBrowser(
                     self._zeroconf.zeroconf,
@@ -123,6 +122,21 @@ class MDNSPlugin:
                     handlers=[self._on_service_state_change],
                 )
             )
+
+    async def start(self) -> None:
+        """Initialize Zeroconf and begin browsing the selected service types."""
+        from zeroconf import InterfaceChoice
+        from zeroconf.asyncio import AsyncZeroconf
+
+        self._events = asyncio.Queue()
+        self._loop = asyncio.get_running_loop()
+
+        interfaces = self.interfaces if self.interfaces is not None else InterfaceChoice.All
+        self._zeroconf = AsyncZeroconf(interfaces=interfaces)
+
+        service_types = await self._service_types_to_browse()
+        _LOGGER.debug("Discovered %d mDNS service types: %s", len(service_types), service_types)
+        self._register_browsers(service_types)
 
     def _on_service_state_change(
         self, zeroconf: Any, service_type: str, name: str, state_change: Any
@@ -134,8 +148,8 @@ class MDNSPlugin:
     async def _resolve(self, service_type: str, name: str, state_change: Any) -> None:
         from zeroconf import ServiceStateChange
 
-        identifier = f"{service_type}|{name}"
         if state_change is ServiceStateChange.Removed:
+            identifier = f"{service_type}|{name}"
             device = DiscoveryObservation(self.name, identifier, name)
             await self._events.put(DiscoveryEvent(DiscoveryState.REMOVED, device))
             return
@@ -155,6 +169,7 @@ class MDNSPlugin:
         await self._events.put(DiscoveryEvent(DiscoveryState.ADDED, device))
 
     async def discover(self) -> AsyncIterator[DiscoveryEvent]:
+        """Yield discovery events until the adapter is stopped."""
         if self._zeroconf is None:
             raise RuntimeError("MDNSPlugin.start() must be called before discover()")
         while True:
@@ -164,6 +179,7 @@ class MDNSPlugin:
             yield event
 
     async def stop(self) -> None:
+        """Cancel browsers, close Zeroconf, and end the discovery stream."""
         for browser in self._browsers:
             await browser.async_cancel()
         self._browsers.clear()
